@@ -125,15 +125,22 @@ export async function loginByPassword(username: string, password: string): Promi
     throw error;
   }
 
-  // 200 OK — try to extract token
+  // 200 OK — extract bearer token from parsed response
   const tokenBody = responseBody as Record<string, unknown> | null;
-  const token =
-    (tokenBody && typeof tokenBody === 'object' &&
-      (typeof (tokenBody as any).access_token === 'string' ? (tokenBody as any).access_token :
-       typeof (tokenBody as any).token === 'string' ? (tokenBody as any).token :
-       typeof (tokenBody as any).data?.access_token === 'string' ? (tokenBody as any).data.access_token :
-       typeof (tokenBody as any).data?.token === 'string' ? (tokenBody as any).data.token :
-       null)) || null;
+  let token: string | null = null;
+
+  if (tokenBody && typeof tokenBody === 'object') {
+    const tb = tokenBody as any;
+    if (typeof tb.access_token === 'string') token = tb.access_token;
+    else if (typeof tb.accessToken === 'string') token = tb.accessToken;
+    else if (typeof tb.token === 'string') token = tb.token;
+    else if (tb.data && typeof tb.data === 'object') {
+      const d = tb.data;
+      if (typeof d.accessToken === 'string') token = d.accessToken;
+      else if (typeof d.access_token === 'string') token = d.access_token;
+      else if (typeof d.token === 'string') token = d.token;
+    }
+  }
 
   if (!token) {
     const diagnostics: IamLoginDiagnostics = {
