@@ -1,6 +1,6 @@
 # WISE Dashboard Template
 
-A full-stack Node.js + TypeScript template server with IAM login, WMS and YMS connectivity health checks, and a background WebSocket bridge for order status change events.
+A full-stack Node.js + TypeScript template server with IAM login, WMS, YMS, and TMS/FMS connectivity health checks, and a background WebSocket bridge for order status change events.
 
 ## Quick Start
 
@@ -22,9 +22,9 @@ Open `http://localhost:3000` in a browser.
 ## Frontend Flow
 
 1. **Sign In** — Authenticate with username/password against the configured IAM endpoint
-2. **Dashboard** — View signed-in state, check WMS and YMS connectivity, sign out
+2. **Dashboard** — View signed-in state, check WMS, YMS, and TMS/FMS connectivity, sign out
 
-No facility selection is required. The bearer token is captured server-side and used for WMS/YMS API calls. The browser never receives raw tokens.
+No facility selection is required. The bearer token is captured server-side and used for WMS/YMS/TMS/FMS API calls. The browser never receives raw tokens.
 
 ## Environment Variables
 
@@ -39,7 +39,11 @@ No facility selection is required. The bearer token is captured server-side and 
 | `TENANT_ID` | `LT` | Default tenant identifier |
 | `FACILITY_ID` | `LT_ORG-8125` | Default facility identifier |
 | `YMS_BASE_URL` | `https://unis.item.com/api` | YMS API base URL |
-| `TIMEZONE` | `America/Los_Angeles` | Timezone sent as Item-Time-Zone header for YMS requests |
+| `TMS_BASE_URL` | `https://unis.item.com/api` | TMS/FMS API gateway base URL |
+| `TMS_HEALTH_PATH` | `/wms-bam/v1/web/user/info` | Read-only upstream path used by `/api/tms/health` |
+| `TICKET_BASE_URL` | `https://unis.item.com/api` | Ticket API gateway base URL |
+| `TICKET_API_KEY` | _(blank)_ | Optional API key for ticket service (omit if not required) |
+| `TIMEZONE` | `America/Los_Angeles` | Timezone sent as Item-Time-Zone header for YMS/TMS requests |
 | `POLL_INTERVAL_MS` | `5000` | Background poller interval in milliseconds |
 | `POLL_PAGE_SIZE` | `50` | Events per poll page |
 | `MOCK_WMS` | `false` | Generate fake events for local testing |
@@ -86,6 +90,52 @@ Use the "Check YMS Connection" button. This calls `GET /api/yms/health` which:
 
 This confirms the bearer token obtained via IAM login is also accepted by the YMS service.
 
+## TMS/FMS Health Check
+
+Use the "Check TMS/FMS Connection" button. This calls `GET /api/tms/health` which:
+
+1. Uses the same server-side session token (Bearer auth) created by IAM login
+2. Calls a safe, non-mutating upstream endpoint: `GET {TMS_BASE_URL}{TMS_HEALTH_PATH}`
+3. Sends business context headers: `x-tenant-id` (`LT` by default), `x-facility-id` (`LT_ORG-8125` by default), and `Item-Time-Zone` (`America/Los_Angeles` by default)
+4. Returns only a sanitized status object to the browser; raw tokens, raw headers, and full upstream bodies are not exposed
+
+Default upstream hint: `https://unis.item.com/api/wms-bam/v1/web/user/info`. This is a read-only UNIS web/IAM user-context endpoint used by transportation/FMS flows (for example, customer context lookup before quoting). If a dedicated TMS/FMS read-only status or tracking-search endpoint is confirmed, set `TMS_HEALTH_PATH` to that path without changing the dashboard route.
+
+Success response shape:
+
+```json
+{ "ok": true, "message": "TMS/FMS connection verified" }
+```
+
+Failure response shape (when authenticated to the dashboard but upstream verification fails):
+
+```json
+{
+  "ok": false,
+  "message": "TMS/FMS access could not be verified",
+  "diagnostics": {
+    "status": 401,
+    "statusText": "Unauthorized",
+    "upstreamMessage": "Unauthorized access",
+    "upstreamCode": "401"
+  }
+}
+```
+
+`diagnostics` is omitted when `AUTH_DEBUG_RESPONSES=false`. If the user has no dashboard session, `/api/tms/health` returns HTTP `401` with `{ "error": "Not authenticated" }`.
+
+## Ticket Health Check
+
+Use the "Check Ticket Connection" button. This calls `GET /api/ticket/health` which:
+
+1. Uses the same server-side session token (Bearer auth) created by IAM login
+2. Calls a safe, read-only endpoint: `GET {TICKET_BASE_URL}/v1/iam/ticket/priorities/list`
+3. Sends `x-tenant-id` (`LT` by default) and optionally `x-api-key` if `TICKET_API_KEY` is configured
+4. Considers the check healthy when HTTP 200 with body `success: true` and `code: 200`
+5. Returns only a sanitized status object to the browser
+
+If `TICKET_API_KEY` is left blank it is simply omitted from the request. Live validation requires valid credentials and appropriate permissions.
+
 ## API Endpoints
 
 | Method | Path | Auth | Description |
@@ -95,6 +145,8 @@ This confirms the bearer token obtained via IAM login is also accepted by the YM
 | `GET` | `/api/auth/me` | Session | Return current username |
 | `GET` | `/api/wms/health` | Session | Check WMS connectivity using session token |
 | `GET` | `/api/yms/health` | Session | Check YMS connectivity using session token |
+| `GET` | `/api/tms/health` | Session | Check TMS/FMS connectivity using session token |
+| `GET` | `/api/ticket/health` | Session | Check Ticket connectivity using session token |
 | `GET` | `/health` | Public | Server status, poller state |
 | `POST` | `/simulate/order-shipped` | Public | Broadcast a fake transition (testing) |
 | `WS` | `/ws` | Public | WebSocket endpoint for live order events |
@@ -141,7 +193,7 @@ public/
 
 - Session tokens stored server-side only (in-memory map)
 - Cookie: httpOnly, SameSite=Strict, HMAC-SHA256 signed
-- No tokens, API URLs, or internal identifiers exposed in the browser UI
+- No tokens, raw headers, or full upstream response bodies exposed in the browser UI
 - `AUTH_DEBUG_RESPONSES=false` suppresses diagnostics from API responses (server still logs them)
 - `.env` is gitignored — never commit credentials
 
@@ -149,7 +201,7 @@ public/
 
 To validate WMS connectivity with real credentials:
 
-1. Set `IAM_BASE_URL`, `WMS_BASE_URL` in `.env`
+1. Set `IAM_BASE_URL`, `WMS_BASE_URL`, and optionally `TMS_BASE_URL`/`TMS_HEALTH_PATH` in `.env`
 2. Start the server: `npm run dev`
 3. Open `http://localhost:3000`, sign in with valid credentials
-4. Click "Check WMS Connection" to verify the bearer token works against WMS
+4. Click "Check WMS Connection" or "Check TMS/FMS Connection" to verify the bearer token works against the selected backend

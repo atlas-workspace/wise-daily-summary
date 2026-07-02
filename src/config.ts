@@ -25,6 +25,16 @@ export const config = {
     baseUrl: process.env.YMS_BASE_URL || 'https://unis.item.com/api',
   },
 
+  tms: {
+    baseUrl: process.env.TMS_BASE_URL || 'https://unis.item.com/api',
+    healthPath: process.env.TMS_HEALTH_PATH || '/wms-bam/v1/web/user/info',
+  },
+
+  ticket: {
+    baseUrl: process.env.TICKET_BASE_URL || 'https://unis.item.com/api',
+    apiKey: process.env.TICKET_API_KEY || '',
+  },
+
   timezone: process.env.TIMEZONE || 'America/Los_Angeles',
 
   poller: {

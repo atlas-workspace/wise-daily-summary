@@ -130,6 +130,144 @@ app.get('/api/yms/health', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/ticket/health', requireAuth, async (req, res) => {
+  const token = req.authContext!.token;
+  const tenantId = req.authContext!.tenantId;
+
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+    'x-tenant-id': tenantId,
+    'User-Agent': 'WISE-Dashboard/1.0',
+  };
+  if (config.ticket.apiKey) {
+    headers['x-api-key'] = config.ticket.apiKey;
+  }
+
+  try {
+    const ticketRes = await fetch(`${config.ticket.baseUrl}/v1/iam/ticket/priorities/list`, {
+      method: 'GET',
+      headers,
+    });
+
+    const text = await ticketRes.text().catch(() => '');
+    let parsed: any = null;
+    try { parsed = text ? JSON.parse(text) : null; } catch { /* not json */ }
+
+    const isHealthy = ticketRes.ok &&
+      parsed && typeof parsed === 'object' &&
+      parsed.success === true &&
+      parsed.code === 200;
+
+    if (!isHealthy) {
+      const summary = 'Ticket access could not be verified';
+      logger.warn('Ticket health check failed', {
+        status: ticketRes.status,
+        statusText: ticketRes.statusText,
+        upstreamCode: parsed?.code,
+      });
+
+      if (config.authDebugResponses) {
+        res.status(200).json({
+          ok: false,
+          message: summary,
+          diagnostics: {
+            status: ticketRes.status,
+            statusText: ticketRes.statusText,
+            upstreamMessage: parsed?.msg || parsed?.message || undefined,
+            upstreamCode: parsed?.code !== undefined ? String(parsed.code) : undefined,
+          },
+        });
+      } else {
+        res.status(200).json({ ok: false, message: summary });
+      }
+      return;
+    }
+
+    logger.info('Ticket health check passed');
+    res.json({ ok: true, message: 'Ticket connection verified' });
+  } catch (err: any) {
+    logger.error('Ticket health check connection error', { error: err.message });
+    const summary = 'Could not reach Ticket service';
+    if (config.authDebugResponses) {
+      res.status(200).json({
+        ok: false,
+        message: summary,
+        diagnostics: { error: err.message },
+      });
+    } else {
+      res.status(200).json({ ok: false, message: summary });
+    }
+  }
+});
+
+app.get('/api/tms/health', requireAuth, async (req, res) => {
+  const token = req.authContext!.token;
+  const tenantId = req.authContext!.tenantId;
+  const facilityId = req.authContext!.facilityId;
+
+  try {
+    const tmsRes = await fetch(`${config.tms.baseUrl}${config.tms.healthPath}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'x-tenant-id': tenantId,
+        'x-facility-id': facilityId,
+        'Item-Time-Zone': config.timezone,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const text = await tmsRes.text().catch(() => '');
+    let parsed: any = null;
+    try { parsed = text ? JSON.parse(text) : null; } catch { /* not json */ }
+
+    const appLevelFailed = parsed && typeof parsed === 'object' && (
+      parsed.success === false ||
+      (typeof parsed.code === 'number' && parsed.code !== 0 && parsed.code !== 200)
+    );
+
+    if (!tmsRes.ok || appLevelFailed) {
+      const summary = 'TMS/FMS access could not be verified';
+      logger.warn('TMS/FMS health check failed', {
+        status: tmsRes.status,
+        statusText: tmsRes.statusText,
+        upstreamCode: parsed?.code,
+      });
+
+      if (config.authDebugResponses) {
+        res.status(200).json({
+          ok: false,
+          message: summary,
+          diagnostics: {
+            status: tmsRes.status,
+            statusText: tmsRes.statusText,
+            upstreamMessage: parsed?.msg || parsed?.message || undefined,
+            upstreamCode: parsed?.code !== undefined ? String(parsed.code) : undefined,
+          },
+        });
+      } else {
+        res.status(200).json({ ok: false, message: summary });
+      }
+      return;
+    }
+
+    logger.info('TMS/FMS health check passed');
+    res.json({ ok: true, message: 'TMS/FMS connection verified' });
+  } catch (err: any) {
+    logger.error('TMS/FMS health check connection error', { error: err.message });
+    const summary = 'Could not reach TMS/FMS service';
+    if (config.authDebugResponses) {
+      res.status(200).json({
+        ok: false,
+        message: summary,
+        diagnostics: { error: err.message },
+      });
+    } else {
+      res.status(200).json({ ok: false, message: summary });
+    }
+  }
+});
+
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',

@@ -119,6 +119,8 @@
     document.getElementById('user-display').textContent = session.username || 'Signed in';
     resetHealthCard('wms');
     resetHealthCard('yms');
+    resetHealthCard('tms');
+    resetHealthCard('ticket');
   }
 
   function resetHealthCard(prefix) {
@@ -199,6 +201,8 @@
 
   setupHealthCheck('btn-check-wms', '/api/wms/health', 'wms', 'WMS');
   setupHealthCheck('btn-check-yms', '/api/yms/health', 'yms', 'YMS');
+  setupHealthCheck('btn-check-tms', '/api/tms/health', 'tms', 'TMS/FMS');
+  setupHealthCheck('btn-check-ticket', '/api/ticket/health', 'ticket', 'Ticket');
 
   // Logout
   document.getElementById('btn-logout').addEventListener('click', async function () {
@@ -207,6 +211,8 @@
     } catch (e) { /* ignore */ }
     resetHealthCard('wms');
     resetHealthCard('yms');
+    resetHealthCard('tms');
+    resetHealthCard('ticket');
     showScreen('login');
   });
 
