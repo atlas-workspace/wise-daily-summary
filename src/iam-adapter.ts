@@ -61,6 +61,29 @@ function sanitizeResponseBody(body: unknown): unknown {
   return sanitized;
 }
 
+export function extractBearerToken(responseBody: unknown): string | null {
+  if (!responseBody || typeof responseBody !== 'object') return null;
+  const tb = responseBody as any;
+
+  if (typeof tb.access_token === 'string' && tb.access_token) return tb.access_token;
+  if (typeof tb.accessToken === 'string' && tb.accessToken) return tb.accessToken;
+  if (typeof tb.token === 'string' && tb.token) return tb.token;
+
+  let dataObj = tb.data;
+  if (typeof dataObj === 'string') {
+    try { dataObj = JSON.parse(dataObj); } catch { dataObj = null; }
+  }
+  if (dataObj && typeof dataObj === 'object') {
+    if (typeof dataObj.accessToken === 'string' && dataObj.accessToken) return dataObj.accessToken;
+    if (typeof dataObj.access_token === 'string' && dataObj.access_token) return dataObj.access_token;
+    if (typeof dataObj.token === 'string' && dataObj.token) return dataObj.token;
+    if (typeof dataObj.bearerToken === 'string' && dataObj.bearerToken) return dataObj.bearerToken;
+    if (typeof dataObj.idToken === 'string' && dataObj.idToken) return dataObj.idToken;
+  }
+
+  return null;
+}
+
 export async function loginByPassword(username: string, password: string): Promise<string> {
   const url = `${config.iam.baseUrl}${config.iam.loginPath}`;
   const sanitizedUrl = sanitizeUrl(url);
@@ -127,20 +150,7 @@ export async function loginByPassword(username: string, password: string): Promi
 
   // 200 OK — extract bearer token from parsed response
   const tokenBody = responseBody as Record<string, unknown> | null;
-  let token: string | null = null;
-
-  if (tokenBody && typeof tokenBody === 'object') {
-    const tb = tokenBody as any;
-    if (typeof tb.access_token === 'string') token = tb.access_token;
-    else if (typeof tb.accessToken === 'string') token = tb.accessToken;
-    else if (typeof tb.token === 'string') token = tb.token;
-    else if (tb.data && typeof tb.data === 'object') {
-      const d = tb.data;
-      if (typeof d.accessToken === 'string') token = d.accessToken;
-      else if (typeof d.access_token === 'string') token = d.access_token;
-      else if (typeof d.token === 'string') token = d.token;
-    }
-  }
+  const token = extractBearerToken(tokenBody);
 
   if (!token) {
     const diagnostics: IamLoginDiagnostics = {
