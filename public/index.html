@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WISE Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <div id="screen-login" class="screen active">
+    <div class="card login-card">
+      <div class="logo">WISE Dashboard</div>
+      <p class="subtitle">Sign in to continue</p>
+      <form id="login-form">
+        <div class="form-group">
+          <input type="text" id="input-username" placeholder="Username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <input type="password" id="input-password" placeholder="Password" required autocomplete="current-password">
+        </div>
+        <div id="login-error" class="error-msg" hidden></div>
+        <button type="submit" id="btn-login" class="btn-primary">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="screen-dashboard" class="screen">
+    <header class="monitor-header">
+      <div class="header-left">
+        <h1 class="monitor-title">WISE Dashboard</h1>
+        <span id="user-display" class="badge badge-facility"></span>
+      </div>
+      <div class="header-right">
+        <button id="btn-logout" class="btn-secondary">Sign Out</button>
+      </div>
+    </header>
+
+    <main class="dashboard-content">
+      <div class="health-cards">
+        <div class="card health-card">
+          <h2 class="card-title">WMS Connection</h2>
+          <div id="wms-health-status" class="health-status idle">
+            <span class="health-dot"></span>
+            <span class="health-text">Not checked</span>
+          </div>
+          <div id="wms-health-message" class="health-message"></div>
+          <div id="wms-health-diag" class="health-diag" hidden></div>
+          <button id="btn-check-wms" class="btn-primary btn-sm">Check WMS Connection</button>
+        </div>
+
+        <div class="card health-card">
+          <h2 class="card-title">YMS Connection</h2>
+          <div id="yms-health-status" class="health-status idle">
+            <span class="health-dot"></span>
+            <span class="health-text">Not checked</span>
+          </div>
+          <div id="yms-health-message" class="health-message"></div>
+          <div id="yms-health-diag" class="health-diag" hidden></div>
+          <button id="btn-check-yms" class="btn-primary btn-sm">Check YMS Connection</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
