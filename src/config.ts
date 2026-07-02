@@ -22,8 +22,10 @@ export const config = {
   },
 
   yms: {
-    baseUrl: process.env.YMS_BASE_URL || 'https://unis.item.com/api/yms',
+    baseUrl: process.env.YMS_BASE_URL || 'https://unis.item.com/api',
   },
+
+  timezone: process.env.TIMEZONE || 'America/Los_Angeles',
 
   poller: {
     intervalMs: parseInt(process.env.POLL_INTERVAL_MS || '5000', 10),

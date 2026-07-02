@@ -75,17 +75,17 @@ app.get('/api/wms/health', requireAuth, async (req, res) => {
 app.get('/api/yms/health', requireAuth, async (req, res) => {
   const token = req.authContext!.token;
   const tenantId = req.authContext!.tenantId;
+  const facilityId = req.authContext!.facilityId;
 
   try {
-    const ymsRes = await fetch(`${config.yms.baseUrl}/user-profile/search-by-paging`, {
-      method: 'POST',
+    const ymsRes = await fetch(`${config.yms.baseUrl}/task-board/employees/filters`, {
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantId,
-        'Content-Type': 'application/json',
-        'Item-Time-Zone': 'America/Los_Angeles',
+        'x-tenant-id': tenantId,
+        'x-facility-id': facilityId,
+        'Item-Time-Zone': config.timezone,
       },
-      body: JSON.stringify({ currentPage: 1, pageSize: 1 }),
     });
 
     if (!ymsRes.ok) {

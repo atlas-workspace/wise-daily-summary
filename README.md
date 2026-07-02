@@ -38,7 +38,8 @@ No facility selection is required. The bearer token is captured server-side and 
 | `WMS_AUTH_TOKEN` | _(blank)_ | Fallback Bearer token for background poller (server-to-server) |
 | `TENANT_ID` | `LT` | Default tenant identifier |
 | `FACILITY_ID` | `LT_ORG-8125` | Default facility identifier |
-| `YMS_BASE_URL` | `https://unis.item.com/api/yms` | YMS API base URL |
+| `YMS_BASE_URL` | `https://unis.item.com/api` | YMS API base URL |
+| `TIMEZONE` | `America/Los_Angeles` | Timezone sent as Item-Time-Zone header for YMS requests |
 | `POLL_INTERVAL_MS` | `5000` | Background poller interval in milliseconds |
 | `POLL_PAGE_SIZE` | `50` | Events per poll page |
 | `MOCK_WMS` | `false` | Generate fake events for local testing |
