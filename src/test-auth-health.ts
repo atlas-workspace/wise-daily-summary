@@ -74,109 +74,17 @@ async function startApp(): Promise<{ port: number; stop: () => Promise<void> }> 
   const { config } = await import('./config');
   const { sessionMiddleware, requireAuth } = await import('./auth-middleware');
   const { authRouter } = await import('./auth-routes');
+  const { buildHealthRoutes } = await import('./health-route');
 
   const app = express();
   app.use(express.json());
   app.use(sessionMiddleware);
   app.use('/api/auth', authRouter);
 
-  // Re-create the health routes with the test config
-  app.get('/api/wms/health', requireAuth, async (req, res) => {
-    const token = req.authContext!.token;
-    const tenantId = req.authContext!.tenantId;
-    try {
-      const wmsRes = await fetch(`${config.wms.baseUrl}/wms-bam/employee/check-bind-code`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': tenantId,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!wmsRes.ok) {
-        res.status(200).json({ ok: false, message: 'WMS access could not be verified' });
-        return;
-      }
-      res.json({ ok: true, message: 'WMS connection verified' });
-    } catch (err: any) {
-      res.status(200).json({ ok: false, message: 'Could not reach WMS service' });
-    }
-  });
-
-  app.get('/api/yms/health', requireAuth, async (req, res) => {
-    const token = req.authContext!.token;
-    const tenantId = req.authContext!.tenantId;
-    const facilityId = req.authContext!.facilityId;
-    try {
-      const ymsRes = await fetch(`${config.yms.baseUrl}/task-board/employees/filters`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': tenantId,
-          'x-facility-id': facilityId,
-          'Item-Time-Zone': config.timezone,
-        },
-      });
-      if (!ymsRes.ok) {
-        res.status(200).json({ ok: false, message: 'YMS access could not be verified' });
-        return;
-      }
-      res.json({ ok: true, message: 'YMS connection verified' });
-    } catch (err: any) {
-      res.status(200).json({ ok: false, message: 'Could not reach YMS service' });
-    }
-  });
-
-  app.get('/api/tms/health', requireAuth, async (req, res) => {
-    const token = req.authContext!.token;
-    const tenantId = req.authContext!.tenantId;
-    const facilityId = req.authContext!.facilityId;
-    try {
-      const tmsRes = await fetch(`${config.tms.baseUrl}${config.tms.healthPath}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': tenantId,
-          'x-facility-id': facilityId,
-          'Item-Time-Zone': config.timezone,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!tmsRes.ok) {
-        res.status(200).json({ ok: false, message: 'TMS/FMS access could not be verified' });
-        return;
-      }
-      res.json({ ok: true, message: 'TMS/FMS connection verified' });
-    } catch (err: any) {
-      res.status(200).json({ ok: false, message: 'Could not reach TMS/FMS service' });
-    }
-  });
-
-  app.get('/api/ticket/health', requireAuth, async (req, res) => {
-    const token = req.authContext!.token;
-    const tenantId = req.authContext!.tenantId;
-    try {
-      const ticketRes = await fetch(`${config.ticket.baseUrl}/v1/iam/ticket/priorities/list`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': tenantId,
-          'User-Agent': 'WISE-Dashboard/1.0',
-        },
-      });
-      const text = await ticketRes.text().catch(() => '');
-      let parsed: any = null;
-      try { parsed = text ? JSON.parse(text) : null; } catch {}
-      const isHealthy = ticketRes.ok && parsed?.success === true && parsed?.code === 200;
-      if (!isHealthy) {
-        res.status(200).json({ ok: false, message: 'Ticket access could not be verified' });
-        return;
-      }
-      res.json({ ok: true, message: 'Ticket connection verified' });
-    } catch (err: any) {
-      res.status(200).json({ ok: false, message: 'Could not reach Ticket service' });
-    }
-  });
+  // Mount the real health routes (same wiring as server.ts)
+  for (const { path: routePath, handler } of buildHealthRoutes()) {
+    app.get(routePath, requireAuth, handler);
+  }
 
   return new Promise((resolve) => {
     const server = app.listen(0, '127.0.0.1', () => {
