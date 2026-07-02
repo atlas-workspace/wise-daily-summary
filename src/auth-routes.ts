@@ -4,20 +4,27 @@ import { logger } from './logger';
 import { loginByPassword, IamLoginError } from './iam-adapter';
 import { createSessionId, signSessionId, setSession, deleteSession, verifySessionId } from './session-store';
 import { requireAuth } from './auth-middleware';
+import { parseCookies } from './cookies';
+import { createRateLimiter } from './rate-limit';
 import type { SessionData } from './types';
 
-function parseCookieHeader(header: string | undefined): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  if (!header) return cookies;
-  for (const pair of header.split(';')) {
-    const idx = pair.indexOf('=');
-    if (idx === -1) continue;
-    const name = pair.slice(0, idx).trim();
-    const value = pair.slice(idx + 1).trim();
-    if (name) cookies[name] = decodeURIComponent(value);
-  }
-  return cookies;
+function buildSessionCookie(value: string, maxAgeSeconds: number): string {
+  const parts = [
+    `${config.session.cookieName}=${value}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (config.isProduction) parts.push('Secure');
+  return parts.join('; ');
 }
+
+const loginRateLimiter = createRateLimiter({
+  max: config.login.rateLimitMax,
+  windowMs: config.login.rateLimitWindowMs,
+  message: 'Too many sign-in attempts. Try again later.',
+});
 
 function isIamLoginError(err: unknown): err is IamLoginError {
   return err instanceof Error && 'diagnostics' in err;
@@ -25,7 +32,7 @@ function isIamLoginError(err: unknown): err is IamLoginError {
 
 const router = Router();
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginRateLimiter, async (req, res) => {
   const { username, password } = req.body || {};
 
   if (!username || !password) {
@@ -47,7 +54,7 @@ router.post('/login', async (req, res) => {
     setSession(sid, session);
     const signedSid = signSessionId(sid);
 
-    res.setHeader('Set-Cookie', `${config.session.cookieName}=${signedSid}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(config.session.maxAgeMs / 1000)}`);
+    res.setHeader('Set-Cookie', buildSessionCookie(signedSid, Math.floor(config.session.maxAgeMs / 1000)));
     res.json({ ok: true, username: session.username });
   } catch (err: unknown) {
     if (isIamLoginError(err)) {
@@ -81,14 +88,14 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  const cookies = parseCookieHeader(req.headers.cookie);
+  const cookies = parseCookies(req.headers.cookie);
   const signedSid = cookies[config.session.cookieName];
   if (signedSid) {
     const sid = verifySessionId(signedSid);
     if (sid) deleteSession(sid);
   }
 
-  res.setHeader('Set-Cookie', `${config.session.cookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+  res.setHeader('Set-Cookie', buildSessionCookie('', 0));
   res.json({ ok: true });
 });
 

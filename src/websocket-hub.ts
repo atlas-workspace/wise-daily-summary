@@ -1,6 +1,9 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'http';
+import type { Server, IncomingMessage } from 'http';
+import { config } from './config';
 import { logger } from './logger';
+import { parseCookies } from './cookies';
+import { verifySessionId, getSession } from './session-store';
 
 export interface StatusChangeMessage {
   type: 'order.status.changed';
@@ -20,8 +23,41 @@ interface WelcomeMessage {
 
 let wss: WebSocketServer;
 
+// Events broadcast on /ws carry raw order payloads, so connections must be
+// authenticated: either a valid dashboard session cookie (browser clients)
+// or the WS_AUTH_KEY shared key (server-to-server consumers), passed as
+// ?key=... or Authorization: Bearer ...
+function isAuthorizedWsRequest(req: IncomingMessage): boolean {
+  if (config.ws.authKey) {
+    const url = new URL(req.url || '', 'http://localhost');
+    if (url.searchParams.get('key') === config.ws.authKey) return true;
+    if (req.headers.authorization === `Bearer ${config.ws.authKey}`) return true;
+  }
+
+  const cookies = parseCookies(req.headers.cookie);
+  const signedSid = cookies[config.session.cookieName];
+  if (signedSid) {
+    const sid = verifySessionId(signedSid);
+    if (sid && getSession(sid)) return true;
+  }
+
+  return false;
+}
+
 export function initWebSocketHub(server: Server): WebSocketServer {
-  wss = new WebSocketServer({ server, path: '/ws' });
+  wss = new WebSocketServer({
+    server,
+    path: '/ws',
+    verifyClient: (info: { req: IncomingMessage }) => {
+      const authorized = isAuthorizedWsRequest(info.req);
+      if (!authorized) {
+        logger.warn('Rejected unauthenticated WebSocket connection', {
+          remoteAddress: info.req.socket.remoteAddress,
+        });
+      }
+      return authorized;
+    },
+  });
 
   wss.on('connection', (ws) => {
     logger.info(`WebSocket client connected (total: ${wss.clients.size})`);

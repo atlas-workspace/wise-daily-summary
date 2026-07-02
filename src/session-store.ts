@@ -4,6 +4,17 @@ import type { SessionData } from './types';
 
 const sessions = new Map<string, SessionData>();
 
+// Expired sessions are also deleted lazily on read, but the sweep bounds
+// memory when sessions are abandoned and never read again.
+const SWEEP_INTERVAL_MS = 60_000;
+const sweepTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [sid, session] of sessions) {
+    if (now - session.createdAt > config.session.maxAgeMs) sessions.delete(sid);
+  }
+}, SWEEP_INTERVAL_MS);
+sweepTimer.unref();
+
 export function createSessionId(): string {
   return crypto.randomBytes(24).toString('hex');
 }

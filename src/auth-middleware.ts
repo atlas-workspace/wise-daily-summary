@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { config } from './config';
 import { verifySessionId, getSession } from './session-store';
+import { parseCookies } from './cookies';
 import type { AuthContext } from './types';
 
 declare global {
@@ -9,19 +10,6 @@ declare global {
       authContext?: AuthContext;
     }
   }
-}
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  if (!header) return cookies;
-  for (const pair of header.split(';')) {
-    const idx = pair.indexOf('=');
-    if (idx === -1) continue;
-    const name = pair.slice(0, idx).trim();
-    const value = pair.slice(idx + 1).trim();
-    if (name) cookies[name] = decodeURIComponent(value);
-  }
-  return cookies;
 }
 
 export function sessionMiddleware(req: Request, _res: Response, next: NextFunction): void {

@@ -275,11 +275,16 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.post('/simulate/order-shipped', (req, res) => {
-  const { orderId } = req.body || {};
-  const message = simulateOrderShipped(orderId);
-  res.json({ success: true, event: message });
-});
+// Broadcasts fake events to every WS client, so it is only registered
+// outside production (or when ENABLE_SIMULATE_ROUTES=true).
+if (config.enableSimulateRoute) {
+  app.post('/simulate/order-shipped', (req, res) => {
+    const { orderId } = req.body || {};
+    const message = simulateOrderShipped(orderId);
+    res.json({ success: true, event: message });
+  });
+  logger.warn('Simulation route enabled: POST /simulate/order-shipped');
+}
 
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

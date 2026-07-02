@@ -5,11 +5,27 @@ import { broadcast, StatusChangeMessage } from './websocket-hub';
 import type { AuthContext } from './types';
 
 const seenEventIds = new Set<string>();
-let pollerTimer: ReturnType<typeof setInterval> | null = null;
+const MAX_SEEN_EVENT_IDS = 5000;
+const MAX_POLL_DELAY_MS = 5 * 60_000;
+
+let pollerTimer: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | null = null;
+let pollerRunning = false;
 let isPolling = false;
 let lastPollTime: string | null = null;
 let pollErrorCount = 0;
 let pollerAuthContext: AuthContext | undefined;
+
+// Bounded dedup memory: Sets iterate in insertion order, so trimming from
+// the front evicts the oldest event ids first.
+function rememberEventId(id: string): void {
+  seenEventIds.add(id);
+  if (seenEventIds.size > MAX_SEEN_EVENT_IDS) {
+    for (const oldest of seenEventIds) {
+      seenEventIds.delete(oldest);
+      if (seenEventIds.size <= MAX_SEEN_EVENT_IDS) break;
+    }
+  }
+}
 
 function buildMessage(event: OrderStatusChangeEvent): StatusChangeMessage {
   return {
@@ -40,7 +56,7 @@ async function pollOnce(): Promise<void> {
     );
 
     for (const event of matchingEvents) {
-      seenEventIds.add(event.id);
+      rememberEventId(event.id);
       const message = buildMessage(event);
       broadcast(message);
 
@@ -83,30 +99,53 @@ function mockPoll(): void {
     updatedTime: new Date().toISOString(),
   };
 
-  seenEventIds.add(eventId);
+  rememberEventId(eventId);
   const message = buildMessage(event);
   broadcast(message);
   lastPollTime = new Date().toISOString();
   logger.info(`[MOCK] Generated sample LOADING→SHIPPED event ${eventId}`);
 }
 
+// setTimeout chain instead of setInterval so consecutive failures back off
+// exponentially (capped at MAX_POLL_DELAY_MS) instead of hammering the
+// gateway at full rate.
+async function runPollLoop(): Promise<void> {
+  await pollOnce();
+  if (!pollerRunning) return;
+
+  const backoffExponent = Math.min(pollErrorCount, 6);
+  const delay = Math.min(config.poller.intervalMs * 2 ** backoffExponent, MAX_POLL_DELAY_MS);
+  if (pollErrorCount > 0) {
+    logger.warn(`Poller backing off after ${pollErrorCount} consecutive error(s); next poll in ${delay}ms`);
+  }
+  pollerTimer = setTimeout(runPollLoop, delay);
+}
+
 export function startPoller(auth?: AuthContext): void {
-  if (pollerTimer) return;
+  if (pollerRunning) return;
   pollerAuthContext = auth;
 
   if (config.mockWms) {
     logger.info(`Starting poller in MOCK mode (interval: ${config.poller.intervalMs}ms)`);
+    pollerRunning = true;
     pollerTimer = setInterval(mockPoll, config.poller.intervalMs);
-  } else {
-    logger.info(`Starting poller in REAL mode (interval: ${config.poller.intervalMs}ms)`);
-    pollerTimer = setInterval(pollOnce, config.poller.intervalMs);
-    pollOnce(); // initial poll immediately
+    return;
   }
+
+  if (!config.wms.authToken && !auth?.token) {
+    logger.warn('Poller not started: WMS_AUTH_TOKEN is not configured (set MOCK_WMS=true for local testing)');
+    return;
+  }
+
+  logger.info(`Starting poller in REAL mode (interval: ${config.poller.intervalMs}ms)`);
+  pollerRunning = true;
+  void runPollLoop();
 }
 
 export function stopPoller(): void {
+  pollerRunning = false;
   if (pollerTimer) {
-    clearInterval(pollerTimer);
+    clearInterval(pollerTimer as ReturnType<typeof setInterval>);
     pollerTimer = null;
     logger.info('Poller stopped');
   }
@@ -114,7 +153,7 @@ export function stopPoller(): void {
 
 export function getPollerState() {
   return {
-    running: pollerTimer !== null,
+    running: pollerRunning,
     mode: config.mockWms ? 'mock' : 'real',
     lastPollTime,
     pollErrorCount,
@@ -134,7 +173,7 @@ export function simulateOrderShipped(orderId?: string): StatusChangeMessage {
     rawEvent: { simulated: true },
   };
 
-  seenEventIds.add(eventId);
+  rememberEventId(eventId);
   broadcast(message);
   return message;
 }

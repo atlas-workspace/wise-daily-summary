@@ -31,24 +31,28 @@ No facility selection is required. The bearer token is captured server-side and 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP/WebSocket server port |
+| `NODE_ENV` | _(blank)_ | Set `production` for deployments: enforces a strong `COOKIE_SECRET`, adds the `Secure` cookie flag, disables `/simulate/*` routes |
 | `IAM_BASE_URL` | `https://unis.item.com/api/wms-bam` | IAM login service base URL |
 | `IAM_LOGIN_PATH` | `/auth/login-by-password` | Login endpoint path (POST with `{username, password}`) |
-| `COOKIE_SECRET` | `dev-secret-change-me` | HMAC secret for session cookie signing |
+| `COOKIE_SECRET` | `dev-secret-change-me` | HMAC secret for session cookie signing. **Required (32+ chars) when `NODE_ENV=production` — the server refuses to start otherwise** |
+| `LOGIN_RATE_LIMIT_MAX` | `10` | Max login attempts per IP per window |
+| `LOGIN_RATE_LIMIT_WINDOW_MS` | `900000` | Login rate-limit window (15 min) |
 | `WMS_BASE_URL` | `https://unis.item.com/api` | WMS API gateway base URL |
-| `WMS_AUTH_TOKEN` | _(blank)_ | Fallback Bearer token for background poller (server-to-server) |
+| `WMS_AUTH_TOKEN` | _(blank)_ | Bearer token for the background poller (server-to-server). If blank, the poller does not start |
 | `TENANT_ID` | `LT` | Default tenant identifier |
 | `FACILITY_ID` | `LT_ORG-8125` | Default facility identifier |
 | `YMS_BASE_URL` | `https://unis.item.com/api` | YMS API base URL |
 | `TMS_BASE_URL` | `https://unis.item.com/api` | TMS/FMS API gateway base URL |
 | `TMS_HEALTH_PATH` | `/wms-bam/v1/web/user/info` | Read-only upstream path used by `/api/tms/health` |
-| `TICKET_BASE_URL` | `https://unis.item.com/api` | Ticket API gateway base URL |
-| `TICKET_API_KEY` | _(blank)_ | Optional API key for ticket service (omit if not required) |
+| `TICKET_BASE_URL` | `https://ticket.item.com/api/item-tickets` | Ticket API gateway base URL |
 | `TIMEZONE` | `America/Los_Angeles` | Timezone sent as Item-Time-Zone header for YMS/TMS requests |
-| `POLL_INTERVAL_MS` | `5000` | Background poller interval in milliseconds |
+| `POLL_INTERVAL_MS` | `5000` | Background poller interval in milliseconds (backs off exponentially on repeated errors, up to 5 min) |
 | `POLL_PAGE_SIZE` | `50` | Events per poll page |
+| `WS_AUTH_KEY` | _(blank)_ | Shared key for non-browser WebSocket consumers (`?key=...` or `Authorization: Bearer ...`). Browser clients use the session cookie |
 | `MOCK_WMS` | `false` | Generate fake events for local testing |
 | `MARK_EVENTS_PROCESSED` | `false` | Mark events as PROCESSED via WMS API after broadcast |
-| `AUTH_DEBUG_RESPONSES` | `true` | Return detailed diagnostics to frontend on failure. Set `false` in production |
+| `ENABLE_SIMULATE_ROUTES` | _(unset)_ | Force-enable/disable `POST /simulate/order-shipped`. Unset: enabled outside production, disabled in production |
+| `AUTH_DEBUG_RESPONSES` | `false` | Return detailed diagnostics to frontend on failure. Enable only while debugging |
 | `LOG_LEVEL` | `info` | Logging level: debug, info, warn, error |
 
 ## Scripts
@@ -130,11 +134,11 @@ Use the "Check Ticket Connection" button. This calls `GET /api/ticket/health` wh
 
 1. Uses the same server-side session token (Bearer auth) created by IAM login
 2. Calls a safe, read-only endpoint: `GET {TICKET_BASE_URL}/v1/iam/ticket/priorities/list`
-3. Sends `x-tenant-id` (`LT` by default) and optionally `x-api-key` if `TICKET_API_KEY` is configured
+3. Sends `x-tenant-id` (`LT` by default)
 4. Considers the check healthy when HTTP 200 with body `success: true` and `code: 200`
 5. Returns only a sanitized status object to the browser
 
-If `TICKET_API_KEY` is left blank it is simply omitted from the request. Live validation requires valid credentials and appropriate permissions.
+The Ticket `/v1/iam/...` endpoints rely solely on the IAM bearer token — no separate API key is needed or sent. Live validation requires valid credentials and appropriate permissions.
 
 ## API Endpoints
 
@@ -148,17 +152,22 @@ If `TICKET_API_KEY` is left blank it is simply omitted from the request. Live va
 | `GET` | `/api/tms/health` | Session | Check TMS/FMS connectivity using session token |
 | `GET` | `/api/ticket/health` | Session | Check Ticket connectivity using session token |
 | `GET` | `/health` | Public | Server status, poller state |
-| `POST` | `/simulate/order-shipped` | Public | Broadcast a fake transition (testing) |
-| `WS` | `/ws` | Public | WebSocket endpoint for live order events |
+| `POST` | `/simulate/order-shipped` | Non-production only | Broadcast a fake transition (testing). Disabled when `NODE_ENV=production` unless `ENABLE_SIMULATE_ROUTES=true` |
+| `WS` | `/ws` | Session cookie or `WS_AUTH_KEY` | WebSocket endpoint for live order events |
+
+`POST /api/auth/login` is rate limited per client IP (10 attempts / 15 min by default); over the limit it returns HTTP `429` with a `Retry-After` header.
 
 ## Background WebSocket Bridge
 
-The server runs a background poller that monitors WMS order status change events (LOADING → SHIPPED transitions) and broadcasts them to connected WebSocket clients. This operates independently of the frontend login flow and uses `WMS_AUTH_TOKEN` from env for server-to-server authentication.
+The server runs a background poller that monitors WMS order status change events (LOADING → SHIPPED transitions) and broadcasts them to connected WebSocket clients. This operates independently of the frontend login flow and uses `WMS_AUTH_TOKEN` from env for server-to-server authentication. If `WMS_AUTH_TOKEN` is blank the poller does not start (set `MOCK_WMS=true` for local testing). On repeated poll failures the interval backs off exponentially, up to 5 minutes.
+
+WebSocket connections to `/ws` must be authenticated: browser clients present the signed dashboard session cookie automatically; server-to-server consumers pass `WS_AUTH_KEY` via `?key=...` or an `Authorization: Bearer` header.
 
 ### WebSocket Client Example
 
 ```javascript
-const ws = new WebSocket('ws://localhost:3000/ws');
+// Non-browser consumer: authenticate with the shared key
+const ws = new WebSocket('ws://localhost:3000/ws?key=' + WS_AUTH_KEY);
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
   if (msg.type === 'order.status.changed') {
@@ -191,10 +200,13 @@ public/
 
 ## Security Notes
 
-- Session tokens stored server-side only (in-memory map)
-- Cookie: httpOnly, SameSite=Strict, HMAC-SHA256 signed
+- Session tokens stored server-side only (in-memory map, swept periodically after expiry)
+- Cookie: httpOnly, SameSite=Strict, HMAC-SHA256 signed; `Secure` flag added when `NODE_ENV=production`
 - No tokens, raw headers, or full upstream response bodies exposed in the browser UI
-- `AUTH_DEBUG_RESPONSES=false` suppresses diagnostics from API responses (server still logs them)
+- Diagnostics in API responses are off by default; set `AUTH_DEBUG_RESPONSES=true` only while debugging (server always logs them)
+- Login endpoint is rate limited per IP; WebSocket connections require a session cookie or `WS_AUTH_KEY`
+- `/simulate/*` routes are disabled in production
+- In production the server refuses to start without a strong `COOKIE_SECRET` (32+ chars)
 - `.env` is gitignored — never commit credentials
 
 ## Live Validation
