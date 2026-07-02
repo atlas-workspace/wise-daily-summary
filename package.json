@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test:extract-token": "tsx src/test-extract-token.ts"
+    "test:extract-token": "tsx src/test-extract-token.ts",
+    "test:auth-health": "tsx --test src/test-auth-health.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

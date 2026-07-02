@@ -131,22 +131,20 @@ app.get('/api/yms/health', requireAuth, async (req, res) => {
 });
 
 app.get('/api/ticket/health', requireAuth, async (req, res) => {
+  // Ticket /v1/iam/... endpoints use the same IAM bearer token from the user's
+  // authenticated session — no separate API key. Auth contract confirmed via
+  // Ticket Ontology: GET /v1/iam/ticket/priorities/list (internal, level2).
   const token = req.authContext!.token;
   const tenantId = req.authContext!.tenantId;
-
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${token}`,
-    'x-tenant-id': tenantId,
-    'User-Agent': 'WISE-Dashboard/1.0',
-  };
-  if (config.ticket.apiKey) {
-    headers['x-api-key'] = config.ticket.apiKey;
-  }
 
   try {
     const ticketRes = await fetch(`${config.ticket.baseUrl}/v1/iam/ticket/priorities/list`, {
       method: 'GET',
-      headers,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'x-tenant-id': tenantId,
+        'User-Agent': 'WISE-Dashboard/1.0',
+      },
     });
 
     const text = await ticketRes.text().catch(() => '');

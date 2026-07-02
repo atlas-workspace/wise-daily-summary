@@ -31,8 +31,10 @@ export const config = {
   },
 
   ticket: {
-    baseUrl: process.env.TICKET_BASE_URL || 'https://unis.item.com/api',
-    apiKey: process.env.TICKET_API_KEY || '',
+    // Ticket /v1/iam/... endpoints authenticate via the same IAM bearer token
+    // stored in the user session. No separate API key is needed or accepted.
+    // See: Ticket Ontology — GET /v1/iam/ticket/priorities/list (internal, level2)
+    baseUrl: process.env.TICKET_BASE_URL || 'https://ticket.item.com/api/item-tickets',
   },
 
   timezone: process.env.TIMEZONE || 'America/Los_Angeles',
