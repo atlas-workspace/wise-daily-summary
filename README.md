@@ -142,6 +142,11 @@ The Ticket `/v1/iam/...` endpoints rely solely on the IAM bearer token — no se
 
 ## API Endpoints
 
+For dashboard-card developers, see:
+
+- [`docs/api-endpoint-catalog.md`](docs/api-endpoint-catalog.md) — cross-system dashboard card endpoint catalog for WMS, TMS/FMS, YMS, and Ticketing.
+- [`docs/wms-dashboard-endpoint-catalog.md`](docs/wms-dashboard-endpoint-catalog.md) — expanded WMS ontology-backed card endpoint catalog.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/api/auth/login` | Public | Authenticate and create session |
