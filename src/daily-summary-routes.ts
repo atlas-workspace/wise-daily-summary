@@ -183,10 +183,9 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
         }
       } else {
         if (i >= 3 && row.loadId.startsWith('78') && row.appointmentTime) {
-          if (['PLANNED', 'COMMIT FAILED', 'STAGED'].includes(status)) {
-            outboundLivesCount++;
-            liveRows.push(row);
-          } else if (status === 'SHIPPED') {
+          outboundLivesCount++;
+          liveRows.push(row);
+          if (status === 'SHIPPED') {
             shippedLiveCount++;
             shippedLiveRows.push(row);
           }
