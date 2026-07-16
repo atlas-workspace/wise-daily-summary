@@ -221,7 +221,7 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
     for (let i = 0; i < lines.length; i++) {
       const cells = parseCSVLine(lines[i]);
 
-      if (i > 3 && cells.length > 5 && cells[1]?.trim() === 'CARRIER' && cells[2]?.trim() === 'RN' && cells[4]?.trim() === 'DOOR' && cells[5]?.trim() === 'REFERENCE#') {
+      if (i > 3 && cells.length > 5 && cells[1]?.trim() === 'CARRIER' && cells[2]?.trim() === 'RN') {
         inDropSection = true;
         continue;
       }
