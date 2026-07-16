@@ -216,8 +216,6 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
     const livePoRows: PoRow[] = [];
     const dropPoRows: PoRow[] = [];
 
-    const EXCLUDED_STATUSES = ['STAGED', 'IN PROGRESS', 'IN PROGESS'];
-
     for (let i = 0; i < lines.length; i++) {
       const cells = parseCSVLine(lines[i]);
 
@@ -247,7 +245,7 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
         dropCount++;
         if (reference.startsWith('76')) dropPoRows.push(row);
       } else {
-        if (!EXCLUDED_STATUSES.includes(status.toUpperCase())) liveCount++;
+        liveCount++;
         if (reference.startsWith('76')) livePoRows.push(row);
       }
     }
