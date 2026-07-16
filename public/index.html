@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WISE Dashboard</title>
+  <title>WMS Daily Summary</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
   <div id="screen-login" class="screen active">
     <div class="card login-card">
-      <div class="logo">WISE Dashboard</div>
+      <div class="logo">WMS Daily Summary</div>
       <p class="subtitle">Sign in to continue</p>
       <form id="login-form">
         <div class="form-group">
@@ -28,60 +28,105 @@
   <div id="screen-dashboard" class="screen">
     <header class="monitor-header">
       <div class="header-left">
-        <h1 class="monitor-title">WISE Dashboard</h1>
+        <h1 class="monitor-title">Daily Summary</h1>
+        <span id="date-badge" class="badge badge-date"></span>
         <span id="user-display" class="badge badge-facility"></span>
       </div>
       <div class="header-right">
-        <button id="btn-logout" class="btn-secondary">Sign Out</button>
+        <span id="last-updated" class="text-muted text-sm"></span>
+        <button id="btn-refresh" class="btn-secondary btn-sm">Refresh</button>
+        <button id="btn-logout" class="btn-secondary btn-sm">Sign Out</button>
       </div>
     </header>
 
     <main class="dashboard-content">
-      <div class="health-cards">
-        <div class="card health-card">
-          <h2 class="card-title">WMS Connection</h2>
-          <div id="wms-health-status" class="health-status idle">
-            <span class="health-dot"></span>
-            <span class="health-text">Not checked</span>
-          </div>
-          <div id="wms-health-message" class="health-message"></div>
-          <div id="wms-health-diag" class="health-diag" hidden></div>
-          <button id="btn-check-wms" class="btn-primary btn-sm">Check WMS Connection</button>
+      <section class="metric-cards">
+        <div class="card metric-card metric-violet" id="card-partial-shipped">
+          <div class="metric-label">Partial Shipped</div>
+          <div class="metric-value" id="val-partial-shipped">—</div>
+          <div class="metric-sub">PEPSICO orders</div>
         </div>
+        <div class="card metric-card metric-red" id="card-commit-failed">
+          <div class="metric-label">Commit Failed</div>
+          <div class="metric-value" id="val-commit-failed">—</div>
+          <div class="metric-sub">PEPSICO orders</div>
+        </div>
+        <div class="card metric-card metric-amber">
+          <div class="metric-label">Loads in Yard</div>
+          <div class="metric-value" id="val-in-yard">—</div>
+          <div class="metric-sub">Drops in yard</div>
+        </div>
+        <div class="card metric-card metric-orange">
+          <div class="metric-label">No RN</div>
+          <div class="metric-value" id="val-no-rn">—</div>
+          <div class="metric-sub">Missing receipt number</div>
+        </div>
+        <div class="card metric-card metric-blue">
+          <div class="metric-label">Staged</div>
+          <div class="metric-value" id="val-staged">—</div>
+          <div class="metric-sub">Outbound staged</div>
+        </div>
+      </section>
 
-        <div class="card health-card">
-          <h2 class="card-title">YMS Connection</h2>
-          <div id="yms-health-status" class="health-status idle">
-            <span class="health-dot"></span>
-            <span class="health-text">Not checked</span>
+      <section class="schedule-section">
+        <h2 class="section-title">Outbound Schedule</h2>
+        <div class="schedule-cards">
+          <div class="card metric-card metric-indigo clickable" id="card-outbound-lives">
+            <div class="metric-label">Outbound Lives</div>
+            <div class="metric-value" id="val-outbound-lives">—</div>
+            <div class="metric-sub">Planned / staged / commit failed</div>
           </div>
-          <div id="yms-health-message" class="health-message"></div>
-          <div id="yms-health-diag" class="health-diag" hidden></div>
-          <button id="btn-check-yms" class="btn-primary btn-sm">Check YMS Connection</button>
+          <div class="card metric-card metric-fuchsia clickable" id="card-preloads">
+            <div class="metric-label">Preloads</div>
+            <div class="metric-value" id="val-preloads">—</div>
+            <div class="metric-sub">Planned / picking / loaded / staged</div>
+          </div>
+          <div class="card metric-card metric-emerald clickable" id="card-shipped-live">
+            <div class="metric-label">Shipped Today</div>
+            <div class="metric-value" id="val-shipped-live">—</div>
+            <div class="metric-sub">Live outbound shipped</div>
+          </div>
+          <div class="card metric-card metric-teal clickable" id="card-shipped-preload">
+            <div class="metric-label">Preloads Shipped</div>
+            <div class="metric-value" id="val-shipped-preload">—</div>
+            <div class="metric-sub">Preloads shipped today</div>
+          </div>
         </div>
+        <div id="outbound-detail" class="detail-table" hidden></div>
+      </section>
 
-        <div class="card health-card">
-          <h2 class="card-title">TMS/FMS Connection</h2>
-          <div id="tms-health-status" class="health-status idle">
-            <span class="health-dot"></span>
-            <span class="health-text">Not checked</span>
+      <section class="schedule-section">
+        <h2 class="section-title">Inbound Schedule</h2>
+        <div class="schedule-cards">
+          <div class="card metric-card metric-emerald clickable" id="card-inbound-live">
+            <div class="metric-label">Live Scheduled</div>
+            <div class="metric-value" id="val-inbound-live">—</div>
+            <div class="metric-sub">Excl. staged / in progress</div>
           </div>
-          <div id="tms-health-message" class="health-message"></div>
-          <div id="tms-health-diag" class="health-diag" hidden></div>
-          <button id="btn-check-tms" class="btn-primary btn-sm">Check TMS/FMS Connection</button>
+          <div class="card metric-card metric-cyan clickable" id="card-inbound-drop">
+            <div class="metric-label">Drop Scheduled</div>
+            <div class="metric-value" id="val-inbound-drop">—</div>
+            <div class="metric-sub">Drop trailer appointments</div>
+          </div>
         </div>
+        <div id="inbound-detail" class="detail-table" hidden></div>
+      </section>
 
-        <div class="card health-card">
-          <h2 class="card-title">Ticket Connection</h2>
-          <div id="ticket-health-status" class="health-status idle">
-            <span class="health-dot"></span>
-            <span class="health-text">Not checked</span>
-          </div>
-          <div id="ticket-health-message" class="health-message"></div>
-          <div id="ticket-health-diag" class="health-diag" hidden></div>
-          <button id="btn-check-ticket" class="btn-primary btn-sm">Check Ticket Connection</button>
+      <section class="schedule-section">
+        <h2 class="section-title">Pepsico Outbound Order Metrics</h2>
+        <p class="section-sub">Current status counts</p>
+        <div id="outbound-metrics-grid" class="metrics-grid">
+          <div class="metrics-placeholder">Sign in to view outbound metrics</div>
         </div>
-      </div>
+      </section>
+
+      <section class="schedule-section">
+        <h2 class="section-title">Pepsico Inbound Order Metrics</h2>
+        <p class="section-sub">Current receipt status counts</p>
+        <div id="inbound-metrics-grid" class="metrics-grid">
+          <div class="metrics-placeholder">Sign in to view inbound metrics</div>
+        </div>
+      </section>
     </main>
   </div>
 

@@ -6,6 +6,7 @@ import { logger } from './logger';
 import { sessionMiddleware, requireAuth } from './auth-middleware';
 import { authRouter } from './auth-routes';
 import { buildHealthRoutes } from './health-route';
+import { summaryRouter } from './daily-summary-routes';
 import { initWebSocketHub, getConnectedClientCount } from './websocket-hub';
 import { startPoller, getPollerState, simulateOrderShipped } from './poller';
 
@@ -16,6 +17,7 @@ app.use(sessionMiddleware);
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/api/auth', authRouter);
+app.use('/api/summary', summaryRouter);
 
 for (const { path: routePath, handler } of buildHealthRoutes()) {
   app.get(routePath, requireAuth, handler);
