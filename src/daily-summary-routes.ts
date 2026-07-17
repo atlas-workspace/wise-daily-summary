@@ -41,6 +41,7 @@ const ORDER_STATUSES = [
   { label: 'Partial Shipped', status: 'PARTIAL_SHIPPED' },
   { label: 'Shipped', status: 'SHIPPED' },
   { label: 'Short Shipped', status: 'SHORT_SHIPPED' },
+  { label: 'Commit Failed', status: 'COMMIT_FAILED' },
 ];
 
 const RECEIPT_STATUSES = [

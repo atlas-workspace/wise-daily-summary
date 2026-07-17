@@ -27,7 +27,7 @@ export const config = {
     baseUrl: process.env.WMS_BASE_URL || 'https://unis.item.com/api',
     authToken: process.env.WMS_AUTH_TOKEN || '',
     tenantId: process.env.TENANT_ID || 'LT',
-    facilityId: process.env.FACILITY_ID || 'LT_ORG-8125',
+    facilityId: process.env.FACILITY_ID || 'LT_F14',
   },
 
   yms: {
