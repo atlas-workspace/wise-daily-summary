@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from './auth-middleware';
 import { config } from './config';
-import { getTodaySheetTabName } from './date-utils';
+import { getTodaySheetTabName, getTodayRangeLA } from './date-utils';
 import type { AuthContext } from './types';
 
 function parseCSVLine(line: string): string[] {
@@ -256,14 +256,16 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
   }
 });
 
-// --- WMS Outbound Metrics (auth required) ---
+// --- WMS Outbound Metrics (auth required, scoped to today) ---
 router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
+  const today = getTodayRangeLA();
   try {
     const results = await Promise.allSettled(
       ORDER_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
           statuses: [s.status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 1,
+          createdTimeFrom: today.from, createdTimeTo: today.to,
         }, auth);
         return data?.totalCount ?? 0;
       })
@@ -272,9 +274,9 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
       label: s.label, status: s.status,
       count: results[i].status === 'fulfilled' ? results[i].value : null,
     }));
-    res.json({ metrics, error: null });
+    res.json({ metrics, date: today.display, error: null });
   } catch (e: any) {
-    res.json({ metrics: [], error: e.message });
+    res.json({ metrics: [], date: today.display, error: e.message });
   }
 });
 

@@ -122,6 +122,9 @@
 
     if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics) {
       renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics);
+      if (outMetrics.value.date) {
+        document.getElementById('outbound-metrics-sub').textContent = 'Orders created today, ' + outMetrics.value.date;
+      }
       var planned = outMetrics.value.metrics.find(m => m.status === 'PARTIAL_SHIPPED');
       var commitFailed = outMetrics.value.metrics.find(m => m.status === 'COMMIT_FAILED');
       if (planned) setVal('val-partial-shipped', planned.count);
