@@ -46,29 +46,31 @@
           <div class="metric-value" id="val-partial-shipped">—</div>
           <div class="metric-sub">PEPSICO orders · click for DNs</div>
         </div>
-        <div class="card metric-card metric-red" id="card-commit-failed">
+        <div class="card metric-card metric-red clickable" id="card-commit-failed">
           <div class="metric-label">Commit Failed</div>
           <div class="metric-value" id="val-commit-failed">—</div>
-          <div class="metric-sub">PEPSICO orders</div>
+          <div class="metric-sub">PEPSICO orders · click for DNs</div>
         </div>
-        <div class="card metric-card metric-amber">
+        <div class="card metric-card metric-amber clickable" id="card-in-yard">
           <div class="metric-label">Loads in Yard</div>
           <div class="metric-value" id="val-in-yard">—</div>
-          <div class="metric-sub">Drops in yard</div>
+          <div class="metric-sub">Drops in yard · click for details</div>
         </div>
-        <div class="card metric-card metric-orange">
+        <div class="card metric-card metric-orange clickable" id="card-no-rn">
           <div class="metric-label">No RN</div>
           <div class="metric-value" id="val-no-rn">—</div>
-          <div class="metric-sub">Missing receipt number</div>
+          <div class="metric-sub">Missing receipt number · click for details</div>
         </div>
-        <div class="card metric-card metric-blue">
+        <div class="card metric-card metric-blue clickable" id="card-staged">
           <div class="metric-label">Staged</div>
           <div class="metric-value" id="val-staged">—</div>
-          <div class="metric-sub">Outbound staged</div>
+          <div class="metric-sub">Outbound staged · click for details</div>
         </div>
       </section>
 
       <div id="partial-shipped-detail" class="detail-table" hidden></div>
+      <div id="commit-failed-detail" class="detail-table" hidden></div>
+      <div id="yard-detail" class="detail-table" hidden></div>
 
       <section class="schedule-section">
         <h2 class="section-title">Outbound Schedule</h2>
@@ -120,6 +122,7 @@
         <div id="outbound-metrics-grid" class="metrics-grid">
           <div class="metrics-placeholder">Sign in to view outbound metrics</div>
         </div>
+        <div id="outbound-metrics-detail" class="detail-table" hidden></div>
       </section>
 
       <section class="schedule-section">
@@ -128,6 +131,7 @@
         <div id="inbound-metrics-grid" class="metrics-grid">
           <div class="metrics-placeholder">Sign in to view inbound metrics</div>
         </div>
+        <div id="inbound-metrics-detail" class="detail-table" hidden></div>
       </section>
     </main>
   </div>

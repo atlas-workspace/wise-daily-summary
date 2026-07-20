@@ -39,7 +39,7 @@
 
   function renderDnTable(rows, containerId) {
     var el = document.getElementById(containerId);
-    if (!rows || rows.length === 0) { el.hidden = true; return; }
+    if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No records</p>'; el.hidden = false; return; }
     var html = '<table><thead><tr><th>DN#</th><th>Status</th><th>Carrier</th><th>Load #</th><th>Appt</th><th>Door</th></tr></thead><tbody>';
     rows.forEach(function (r) {
       var dnCell = r.dn ? '<a class="dn-link" href="https://unis.item.com/wms/outbound/order/view/' + escapeHtml(r.dn.replace('DN-', '')) + '" target="_blank" rel="noopener">' + escapeHtml(r.dn) + '</a>' : '—';
@@ -52,7 +52,7 @@
 
   function renderPoTable(rows, containerId) {
     var el = document.getElementById(containerId);
-    if (!rows || rows.length === 0) { el.hidden = true; return; }
+    if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No records</p>'; el.hidden = false; return; }
     var html = '<table><thead><tr><th>PO</th><th>Status</th><th>Carrier</th><th>RN</th><th>Door</th><th>Appt/Arrival</th></tr></thead><tbody>';
     rows.forEach(function (r) {
       html += '<tr><td class="dn-link">' + escapeHtml(r.po || '—') + '</td><td>' + escapeHtml(r.status || '—') + '</td><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td><td>' + escapeHtml(r.appointmentTime || '—') + (r.arrivalTime ? ' / ' + escapeHtml(r.arrivalTime) : '') + '</td></tr>';
@@ -62,7 +62,48 @@
     el.hidden = false;
   }
 
-  function renderMetricsGrid(containerId, metrics) {
+  function renderYardTable(rows, containerId, title) {
+    var el = document.getElementById(containerId);
+    if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No records</p>'; el.hidden = false; return; }
+    var html = '<p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;">' + escapeHtml(title) + ' (' + rows.length + ')</p>';
+    html += '<table><thead><tr><th>Carrier</th><th>RN</th><th>Trailer</th><th>Reference</th><th>Date</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.trailer || '—') + '</td><td>' + escapeHtml(r.reference || '—') + '</td><td>' + escapeHtml(r.date || '—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
+  function renderOrderTable(orders, containerId, statusLabel) {
+    var el = document.getElementById(containerId);
+    if (!orders || orders.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No ' + escapeHtml(statusLabel) + ' orders</p>'; el.hidden = false; return; }
+    var html = '<table><thead><tr><th>DN / Order ID</th><th>Reference</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
+    orders.forEach(function (o) {
+      var idCell = o.id ? '<a class="dn-link" href="https://unis.item.com/wms/outbound/order/view/' + escapeHtml(o.id) + '" target="_blank" rel="noopener">' + escapeHtml(o.id) + '</a>' : '—';
+      var created = o.createdTime ? new Date(o.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+      html += '<tr><td>' + idCell + '</td><td>' + escapeHtml(o.referenceNo || '—') + '</td><td><span class="status-badge ' + statusClass(o.status) + '">' + escapeHtml(o.status || statusLabel) + '</span></td><td>' + escapeHtml(o.loadNo || '—') + '</td><td>' + escapeHtml(created) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
+  function renderReceiptTable(receipts, containerId, statusLabel) {
+    var el = document.getElementById(containerId);
+    if (!receipts || receipts.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No ' + escapeHtml(statusLabel) + ' receipts</p>'; el.hidden = false; return; }
+    var html = '<table><thead><tr><th>Receipt ID</th><th>PO</th><th>Reference</th><th>Status</th><th>Appointment</th></tr></thead><tbody>';
+    receipts.forEach(function (r) {
+      var idCell = r.id ? '<a class="dn-link" href="https://unis.item.com/wms/inbound/receipt/view/' + escapeHtml(r.id) + '" target="_blank" rel="noopener">' + escapeHtml(r.id) + '</a>' : '—';
+      var appt = r.appointmentTime ? new Date(r.appointmentTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+      html += '<tr><td>' + idCell + '</td><td>' + escapeHtml(r.poNo || '—') + '</td><td>' + escapeHtml(r.referenceNo || '—') + '</td><td><span class="status-badge ' + statusClass(r.status) + '">' + escapeHtml(r.status || statusLabel) + '</span></td><td>' + escapeHtml(appt) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
+  function renderMetricsGrid(containerId, metrics, clickHandler) {
     var el = document.getElementById(containerId);
     if (!metrics || metrics.length === 0) {
       el.innerHTML = '<div class="metrics-placeholder">Unable to load metrics</div>';
@@ -70,33 +111,46 @@
     }
     var html = '';
     metrics.forEach(function (m) {
-      html += '<div class="grid-metric"><div class="grid-metric-label">' + escapeHtml(m.label) + '</div><div class="grid-metric-value">' + (m.count != null ? m.count : '—') + '</div></div>';
+      html += '<div class="grid-metric clickable" data-status="' + escapeHtml(m.status) + '"><div class="grid-metric-label">' + escapeHtml(m.label) + '</div><div class="grid-metric-value">' + (m.count != null ? m.count : '—') + '</div></div>';
     });
     el.innerHTML = html;
+    if (clickHandler) {
+      el.querySelectorAll('.grid-metric.clickable').forEach(function (card) {
+        card.addEventListener('click', function () { clickHandler(card.dataset.status); });
+      });
+    }
   }
 
   function updateTimestamp() {
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   }
 
-  // Data fetching
+  // Data state
   var outboundData = null;
   var inboundData = null;
+  var yardData = null;
+  var partialShippedData = [];
+  var commitFailedData = [];
 
   async function fetchAll() {
     updateTimestamp();
-    // Sheet-based (no auth)
+    // Hide all detail panels on refresh
+    ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'outbound-detail', 'inbound-detail', 'outbound-metrics-detail', 'inbound-metrics-detail'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.hidden = true;
+    });
+
     var [yardRes, outboundRes, inboundRes] = await Promise.allSettled([
-      fetch('/api/summary/yard').then(r => r.json()),
-      fetch('/api/summary/outbound-schedule').then(r => r.json()),
-      fetch('/api/summary/inbound-schedule').then(r => r.json()),
+      fetch('/api/summary/yard').then(function (r) { return r.json(); }),
+      fetch('/api/summary/outbound-schedule').then(function (r) { return r.json(); }),
+      fetch('/api/summary/inbound-schedule').then(function (r) { return r.json(); }),
     ]);
 
     if (yardRes.status === 'fulfilled' && !yardRes.value.error) {
-      var y = yardRes.value;
-      setVal('val-in-yard', y.inYardCount);
-      setVal('val-no-rn', y.noRnCount);
-      setVal('val-staged', y.stagedCount);
+      yardData = yardRes.value;
+      setVal('val-in-yard', yardData.inYardCount);
+      setVal('val-no-rn', yardData.noRnCount);
+      setVal('val-staged', yardData.stagedCount);
     }
 
     if (outboundRes.status === 'fulfilled' && !outboundRes.value.error) {
@@ -114,30 +168,24 @@
     }
 
     // Auth-required WMS metrics
-    var [outMetrics, inMetrics, partialRes] = await Promise.allSettled([
-      fetch('/api/summary/outbound-metrics').then(r => { if (r.status === 401) throw new Error('auth'); return r.json(); }),
-      fetch('/api/summary/inbound-metrics').then(r => { if (r.status === 401) throw new Error('auth'); return r.json(); }),
-      fetch('/api/summary/partial-shipped').then(r => { if (r.status === 401) throw new Error('auth'); return r.json(); }),
+    var [outMetrics, inMetrics, partialRes, commitRes] = await Promise.allSettled([
+      fetch('/api/summary/outbound-metrics').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
+      fetch('/api/summary/inbound-metrics').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
+      fetch('/api/summary/partial-shipped').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
+      fetch('/api/summary/commit-failed').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
     ]);
 
     if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics) {
-      renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics);
+      renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics, handleOutboundMetricClick);
       if (outMetrics.value.date) {
-        document.getElementById('outbound-metrics-sub').textContent = 'Scheduled for today, ' + outMetrics.value.date;
+        document.getElementById('outbound-metrics-sub').textContent = 'Orders created today, ' + outMetrics.value.date;
       }
-      var planned = outMetrics.value.metrics.find(m => m.status === 'PARTIAL_SHIPPED');
-      var commitFailed = outMetrics.value.metrics.find(m => m.status === 'COMMIT_FAILED');
-      if (planned) setVal('val-partial-shipped', planned.count);
-      if (commitFailed) setVal('val-commit-failed', commitFailed.count);
     } else {
       document.getElementById('outbound-metrics-grid').innerHTML = '<div class="metrics-placeholder">Sign in to view outbound metrics</div>';
     }
 
     if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics) {
-      renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics);
-      if (inMetrics.value.date) {
-        document.getElementById('inbound-metrics-sub').textContent = 'Scheduled for today, ' + inMetrics.value.date;
-      }
+      renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics, handleInboundMetricClick);
     } else {
       document.getElementById('inbound-metrics-grid').innerHTML = '<div class="metrics-placeholder">Sign in to view inbound metrics</div>';
     }
@@ -146,75 +194,133 @@
       setVal('val-partial-shipped', partialRes.value.totalCount);
       partialShippedData = partialRes.value.orders || [];
     }
+
+    if (commitRes.status === 'fulfilled' && commitRes.value.totalCount != null) {
+      setVal('val-commit-failed', commitRes.value.totalCount);
+      commitFailedData = commitRes.value.orders || [];
+    }
   }
 
-  // Partial Shipped detail toggle
-  var partialShippedData = [];
-  var partialShippedVisible = false;
+  // --- Click handlers for top metric cards ---
+  var topDetailVisible = null;
 
-  function renderPartialShippedTable() {
-    var el = document.getElementById('partial-shipped-detail');
-    if (!partialShippedData || partialShippedData.length === 0) {
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No partial shipped orders found. Sign in if not authenticated.</p>';
-      el.hidden = false;
-      return;
+  function toggleTopDetail(key, renderFn) {
+    var panels = ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail'];
+    if (topDetailVisible === key) {
+      panels.forEach(function (id) { document.getElementById(id).hidden = true; });
+      topDetailVisible = null;
+    } else {
+      panels.forEach(function (id) { document.getElementById(id).hidden = true; });
+      renderFn();
+      topDetailVisible = key;
     }
-    var html = '<table><thead><tr><th>DN / Order ID</th><th>Reference</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
-    partialShippedData.forEach(function (o) {
-      var idCell = o.id ? '<a class="dn-link" href="https://unis.item.com/wms/outbound/order/view/' + escapeHtml(o.id) + '" target="_blank" rel="noopener">' + escapeHtml(o.id) + '</a>' : '—';
-      var created = o.createdTime ? new Date(o.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-      html += '<tr><td>' + idCell + '</td><td>' + escapeHtml(o.referenceNo || '—') + '</td><td><span class="status-badge status-planned">PARTIAL SHIPPED</span></td><td>' + escapeHtml(o.loadNo || '—') + '</td><td>' + escapeHtml(created) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-    el.innerHTML = html;
-    el.hidden = false;
   }
 
   document.getElementById('card-partial-shipped').addEventListener('click', function () {
-    var el = document.getElementById('partial-shipped-detail');
-    if (partialShippedVisible) {
-      el.hidden = true;
-      partialShippedVisible = false;
-    } else {
-      renderPartialShippedTable();
-      partialShippedVisible = true;
-    }
+    toggleTopDetail('partial', function () {
+      renderOrderTable(partialShippedData, 'partial-shipped-detail', 'PARTIAL SHIPPED');
+    });
   });
 
-  // Toggle detail tables
+  document.getElementById('card-commit-failed').addEventListener('click', function () {
+    toggleTopDetail('commit', function () {
+      renderOrderTable(commitFailedData, 'commit-failed-detail', 'COMMIT FAILED');
+    });
+  });
+
+  document.getElementById('card-in-yard').addEventListener('click', function () {
+    toggleTopDetail('yard', function () {
+      renderYardTable(yardData ? yardData.inYardRows : [], 'yard-detail', 'Loads in Yard');
+    });
+  });
+
+  document.getElementById('card-no-rn').addEventListener('click', function () {
+    toggleTopDetail('norn', function () {
+      renderYardTable(yardData ? yardData.noRnRows : [], 'yard-detail', 'No RN');
+    });
+  });
+
+  document.getElementById('card-staged').addEventListener('click', function () {
+    toggleTopDetail('staged', function () {
+      renderYardTable(yardData ? yardData.stagedRows : [], 'yard-detail', 'Staged');
+    });
+  });
+
+  // --- Outbound schedule card toggles ---
   var outboundDetailVisible = null;
+  function toggleOutbound(key, rows) {
+    var el = document.getElementById('outbound-detail');
+    if (outboundDetailVisible === key) { el.hidden = true; outboundDetailVisible = null; return; }
+    renderDnTable(rows, 'outbound-detail');
+    outboundDetailVisible = key;
+  }
+
   document.getElementById('card-outbound-lives').addEventListener('click', function () {
-    if (outboundDetailVisible === 'lives') { document.getElementById('outbound-detail').hidden = true; outboundDetailVisible = null; return; }
-    if (outboundData) renderDnTable(outboundData.liveRows, 'outbound-detail');
-    outboundDetailVisible = 'lives';
+    toggleOutbound('lives', outboundData ? outboundData.liveRows : []);
   });
   document.getElementById('card-preloads').addEventListener('click', function () {
-    if (outboundDetailVisible === 'preloads') { document.getElementById('outbound-detail').hidden = true; outboundDetailVisible = null; return; }
-    if (outboundData) renderDnTable(outboundData.preloadRows, 'outbound-detail');
-    outboundDetailVisible = 'preloads';
+    toggleOutbound('preloads', outboundData ? outboundData.preloadRows : []);
   });
   document.getElementById('card-shipped-live').addEventListener('click', function () {
-    if (outboundDetailVisible === 'shipped') { document.getElementById('outbound-detail').hidden = true; outboundDetailVisible = null; return; }
-    if (outboundData) renderDnTable(outboundData.shippedLiveRows, 'outbound-detail');
-    outboundDetailVisible = 'shipped';
+    toggleOutbound('shipped', outboundData ? outboundData.shippedLiveRows : []);
   });
   document.getElementById('card-shipped-preload').addEventListener('click', function () {
-    if (outboundDetailVisible === 'shippedPre') { document.getElementById('outbound-detail').hidden = true; outboundDetailVisible = null; return; }
-    if (outboundData) renderDnTable(outboundData.shippedPreloadRows, 'outbound-detail');
-    outboundDetailVisible = 'shippedPre';
+    toggleOutbound('shippedPre', outboundData ? outboundData.shippedPreloadRows : []);
   });
 
+  // --- Inbound schedule card toggles ---
   var inboundDetailVisible = null;
+  function toggleInbound(key, rows) {
+    var el = document.getElementById('inbound-detail');
+    if (inboundDetailVisible === key) { el.hidden = true; inboundDetailVisible = null; return; }
+    renderPoTable(rows, 'inbound-detail');
+    inboundDetailVisible = key;
+  }
+
   document.getElementById('card-inbound-live').addEventListener('click', function () {
-    if (inboundDetailVisible === 'live') { document.getElementById('inbound-detail').hidden = true; inboundDetailVisible = null; return; }
-    if (inboundData) renderPoTable(inboundData.livePoRows, 'inbound-detail');
-    inboundDetailVisible = 'live';
+    toggleInbound('live', inboundData ? inboundData.livePoRows : []);
   });
   document.getElementById('card-inbound-drop').addEventListener('click', function () {
-    if (inboundDetailVisible === 'drop') { document.getElementById('inbound-detail').hidden = true; inboundDetailVisible = null; return; }
-    if (inboundData) renderPoTable(inboundData.dropPoRows, 'inbound-detail');
-    inboundDetailVisible = 'drop';
+    toggleInbound('drop', inboundData ? inboundData.dropPoRows : []);
   });
+
+  // --- WMS Outbound Metric grid cell clicks ---
+  var outboundMetricDetailStatus = null;
+  async function handleOutboundMetricClick(status) {
+    var el = document.getElementById('outbound-metrics-detail');
+    if (outboundMetricDetailStatus === status) { el.hidden = true; outboundMetricDetailStatus = null; return; }
+    el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Loading...</p>';
+    el.hidden = false;
+    outboundMetricDetailStatus = status;
+    try {
+      var res = await fetch('/api/summary/outbound-orders/' + encodeURIComponent(status));
+      if (res.status === 401) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Sign in to view details</p>'; return; }
+      var data = await res.json();
+      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
+      renderOrderTable(data.orders, 'outbound-metrics-detail', status);
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
+    }
+  }
+
+  // --- WMS Inbound Metric grid cell clicks ---
+  var inboundMetricDetailStatus = null;
+  async function handleInboundMetricClick(status) {
+    var el = document.getElementById('inbound-metrics-detail');
+    if (inboundMetricDetailStatus === status) { el.hidden = true; inboundMetricDetailStatus = null; return; }
+    el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Loading...</p>';
+    el.hidden = false;
+    inboundMetricDetailStatus = status;
+    try {
+      var res = await fetch('/api/summary/inbound-receipts/' + encodeURIComponent(status));
+      if (res.status === 401) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Sign in to view details</p>'; return; }
+      var data = await res.json();
+      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
+      renderReceiptTable(data.receipts, 'inbound-metrics-detail', status);
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
+    }
+  }
 
   // Init dashboard
   function initDashboard(session) {
@@ -224,7 +330,14 @@
   }
 
   // Refresh
-  document.getElementById('btn-refresh').addEventListener('click', fetchAll);
+  document.getElementById('btn-refresh').addEventListener('click', function () {
+    topDetailVisible = null;
+    outboundDetailVisible = null;
+    inboundDetailVisible = null;
+    outboundMetricDetailStatus = null;
+    inboundMetricDetailStatus = null;
+    fetchAll();
+  });
 
   // Check session on load
   async function checkSession() {

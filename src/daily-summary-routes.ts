@@ -82,7 +82,7 @@ async function wmsSearch(path: string, body: unknown, auth: AuthContext) {
 
 const router = Router();
 
-// --- Yard (no auth needed) ---
+// --- Yard with detail rows (no auth needed) ---
 router.get('/yard', async (_req: Request, res: Response) => {
   try {
     const text = await fetchSheet(`https://docs.google.com/spreadsheets/d/${YARD_SHEET_ID}/export?format=csv&gid=0`);
@@ -92,14 +92,22 @@ router.get('/yard', async (_req: Request, res: Response) => {
     let noRnCount = 0;
     let stagedCount = 0;
 
-    // Right table: col 12 = carrier, col 13 = RN
+    interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; }
+    const inYardRows: YardRow[] = [];
+    const noRnRows: YardRow[] = [];
+    const stagedRows: YardRow[] = [];
+
+    // Right table: col 12 = carrier, col 13 = RN, col 14 = trailer, col 15 = reference, col 16 = date
     for (let i = 2; i < lines.length; i++) {
       const cells = parseCSVLine(lines[i]);
       const carrier = (cells[12] ?? '').trim();
       if (!carrier) continue;
+      const rn = (cells[13] ?? '').trim();
+      const row: YardRow = { carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date: (cells[16] ?? '').trim() };
       inYardCount++;
-      const rn = (cells[13] ?? '').trim().toUpperCase().replace(/-/g, ' ');
-      if (rn === 'NO RN' || rn.includes('NO RN')) noRnCount++;
+      inYardRows.push(row);
+      const rnUpper = rn.toUpperCase().replace(/-/g, ' ');
+      if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push(row); }
     }
 
     // Left table: staged loads (stop at first blank gap)
@@ -122,15 +130,18 @@ router.get('/yard', async (_req: Request, res: Response) => {
         const ref = (cells[3] ?? '').trim();
         if (!carrier && !rn && !ref) break;
         if (!carrier) continue;
-        if (rn || ref) stagedCount++;
+        if (rn || ref) {
+          stagedCount++;
+          stagedRows.push({ carrier, rn, trailer: '', reference: ref, date: (cells[5] ?? '').trim() });
+        }
         const rnUpper = rn.toUpperCase().replace(/-/g, ' ');
-        if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) noRnCount++;
+        if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push({ carrier, rn, trailer: '', reference: ref, date: (cells[5] ?? '').trim() }); }
       }
     }
 
-    res.json({ inYardCount, noRnCount, stagedCount, error: null });
+    res.json({ inYardCount, noRnCount, stagedCount, inYardRows, noRnRows, stagedRows, error: null });
   } catch (e: any) {
-    res.json({ inYardCount: null, noRnCount: null, stagedCount: null, error: e.message });
+    res.json({ inYardCount: null, noRnCount: null, stagedCount: null, inYardRows: [], noRnRows: [], stagedRows: [], error: e.message });
   }
 });
 
@@ -303,6 +314,61 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
     res.json({ metrics, date: today.display, error: null });
   } catch (e: any) {
     res.json({ metrics: [], date: today.display, error: e.message });
+  }
+});
+
+// --- WMS Outbound Order Detail by Status (auth required) ---
+router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Response) => {
+  const auth = req.authContext!;
+  const today = getTodayRangeLA();
+  const status = req.params.status;
+  try {
+    const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
+      statuses: [status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
+      createdTimeFrom: today.from, createdTimeTo: today.to,
+    }, auth);
+    const orders = (data?.list ?? []).map((o: any) => ({
+      id: o.id, referenceNo: o.referenceNo ?? '', status: o.status,
+      createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '', shipTo: o.shipTo ?? '',
+    }));
+    res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
+  } catch (e: any) {
+    res.json({ totalCount: null, orders: [], error: e.message });
+  }
+});
+
+// --- WMS Inbound Receipt Detail by Status (auth required) ---
+router.get('/inbound-receipts/:status', requireAuth, async (req: Request, res: Response) => {
+  const auth = req.authContext!;
+  const status = req.params.status;
+  try {
+    const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
+      statuses: [status], currentPage: 1, pageSize: 50,
+    }, auth);
+    const receipts = (data?.list ?? []).map((r: any) => ({
+      id: r.id, poNo: r.poNo ?? '', referenceNo: r.referenceNo ?? '', status: r.status,
+      appointmentTime: r.appointmentTime ?? '', customerId: r.customerId ?? '',
+    }));
+    res.json({ totalCount: data?.totalCount ?? 0, receipts, error: null });
+  } catch (e: any) {
+    res.json({ totalCount: null, receipts: [], error: e.message });
+  }
+});
+
+// --- Commit Failed Detail (auth required, current-status) ---
+router.get('/commit-failed', requireAuth, async (req: Request, res: Response) => {
+  const auth = req.authContext!;
+  try {
+    const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
+      statuses: ['COMMIT_FAILED'], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
+    }, auth);
+    const orders = (data?.list ?? []).map((o: any) => ({
+      id: o.id, referenceNo: o.referenceNo ?? '', status: o.status,
+      createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '', shipTo: o.shipTo ?? '',
+    }));
+    res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
+  } catch (e: any) {
+    res.json({ totalCount: null, orders: [], error: e.message });
   }
 });
 
