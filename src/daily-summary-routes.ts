@@ -302,7 +302,7 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
   }
 });
 
-// --- Partial Shipped Detail (auth required) ---
+// --- Partial Shipped Detail (auth required, current-status, no date filter) ---
 router.get('/partial-shipped', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
   try {
@@ -310,7 +310,8 @@ router.get('/partial-shipped', requireAuth, async (req: Request, res: Response) 
       statuses: ['PARTIAL_SHIPPED'], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
     }, auth);
     const orders = (data?.list ?? []).map((o: any) => ({
-      id: o.id, referenceNo: o.referenceNo ?? '', status: o.status, createdTime: o.createdTime ?? '',
+      id: o.id, referenceNo: o.referenceNo ?? '', status: o.status,
+      createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '', shipTo: o.shipTo ?? '',
     }));
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {

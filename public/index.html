@@ -41,10 +41,10 @@
 
     <main class="dashboard-content">
       <section class="metric-cards">
-        <div class="card metric-card metric-violet" id="card-partial-shipped">
+        <div class="card metric-card metric-violet clickable" id="card-partial-shipped">
           <div class="metric-label">Partial Shipped</div>
           <div class="metric-value" id="val-partial-shipped">—</div>
-          <div class="metric-sub">PEPSICO orders</div>
+          <div class="metric-sub">PEPSICO orders · click for DNs</div>
         </div>
         <div class="card metric-card metric-red" id="card-commit-failed">
           <div class="metric-label">Commit Failed</div>
@@ -67,6 +67,8 @@
           <div class="metric-sub">Outbound staged</div>
         </div>
       </section>
+
+      <div id="partial-shipped-detail" class="detail-table" hidden></div>
 
       <section class="schedule-section">
         <h2 class="section-title">Outbound Schedule</h2>

@@ -141,8 +141,42 @@
 
     if (partialRes.status === 'fulfilled' && partialRes.value.totalCount != null) {
       setVal('val-partial-shipped', partialRes.value.totalCount);
+      partialShippedData = partialRes.value.orders || [];
     }
   }
+
+  // Partial Shipped detail toggle
+  var partialShippedData = [];
+  var partialShippedVisible = false;
+
+  function renderPartialShippedTable() {
+    var el = document.getElementById('partial-shipped-detail');
+    if (!partialShippedData || partialShippedData.length === 0) {
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No partial shipped orders found. Sign in if not authenticated.</p>';
+      el.hidden = false;
+      return;
+    }
+    var html = '<table><thead><tr><th>DN / Order ID</th><th>Reference</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
+    partialShippedData.forEach(function (o) {
+      var idCell = o.id ? '<a class="dn-link" href="https://unis.item.com/wms/outbound/order/view/' + escapeHtml(o.id) + '" target="_blank" rel="noopener">' + escapeHtml(o.id) + '</a>' : '—';
+      var created = o.createdTime ? new Date(o.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+      html += '<tr><td>' + idCell + '</td><td>' + escapeHtml(o.referenceNo || '—') + '</td><td><span class="status-badge status-planned">PARTIAL SHIPPED</span></td><td>' + escapeHtml(o.loadNo || '—') + '</td><td>' + escapeHtml(created) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
+  document.getElementById('card-partial-shipped').addEventListener('click', function () {
+    var el = document.getElementById('partial-shipped-detail');
+    if (partialShippedVisible) {
+      el.hidden = true;
+      partialShippedVisible = false;
+    } else {
+      renderPartialShippedTable();
+      partialShippedVisible = true;
+    }
+  });
 
   // Toggle detail tables
   var outboundDetailVisible = null;
