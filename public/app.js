@@ -135,6 +135,9 @@
 
     if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics) {
       renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics);
+      if (inMetrics.value.date) {
+        document.getElementById('inbound-metrics-sub').textContent = 'Receipts created today, ' + inMetrics.value.date;
+      }
     } else {
       document.getElementById('inbound-metrics-grid').innerHTML = '<div class="metrics-placeholder">Sign in to view inbound metrics</div>';
     }

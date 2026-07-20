@@ -282,14 +282,16 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
   }
 });
 
-// --- WMS Inbound Metrics (auth required) ---
+// --- WMS Inbound Metrics (auth required, scoped to today) ---
 router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
+  const today = getTodayRangeLA();
   try {
     const results = await Promise.allSettled(
       RECEIPT_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
           statuses: [s.status], currentPage: 1, pageSize: 1,
+          createdTimeFrom: today.from, createdTimeTo: today.to,
         }, auth);
         return data?.totalCount ?? 0;
       })
@@ -298,9 +300,9 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
       label: s.label, status: s.status,
       count: results[i].status === 'fulfilled' ? results[i].value : null,
     }));
-    res.json({ metrics, error: null });
+    res.json({ metrics, date: today.display, error: null });
   } catch (e: any) {
-    res.json({ metrics: [], error: e.message });
+    res.json({ metrics: [], date: today.display, error: e.message });
   }
 });
 
