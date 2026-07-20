@@ -258,7 +258,7 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
   }
 });
 
-// --- WMS Outbound Metrics (auth required, scoped to today) ---
+// --- WMS Outbound Metrics (auth required, scoped to today's schedule) ---
 router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
   const today = getTodayRangeLA();
@@ -267,7 +267,7 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
       ORDER_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
           statuses: [s.status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 1,
-          createdTimeFrom: today.from, createdTimeTo: today.to,
+          appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
         }, auth);
         return data?.totalCount ?? 0;
       })
@@ -282,7 +282,7 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
   }
 });
 
-// --- WMS Inbound Metrics (auth required, scoped to today) ---
+// --- WMS Inbound Metrics (auth required, scoped to today's schedule) ---
 router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
   const today = getTodayRangeLA();
@@ -291,7 +291,7 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
       RECEIPT_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
           statuses: [s.status], currentPage: 1, pageSize: 1,
-          createdTimeFrom: today.from, createdTimeTo: today.to,
+          appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
         }, auth);
         return data?.totalCount ?? 0;
       })

@@ -123,7 +123,7 @@
     if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics) {
       renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics);
       if (outMetrics.value.date) {
-        document.getElementById('outbound-metrics-sub').textContent = 'Orders created today, ' + outMetrics.value.date;
+        document.getElementById('outbound-metrics-sub').textContent = 'Scheduled for today, ' + outMetrics.value.date;
       }
       var planned = outMetrics.value.metrics.find(m => m.status === 'PARTIAL_SHIPPED');
       var commitFailed = outMetrics.value.metrics.find(m => m.status === 'COMMIT_FAILED');
@@ -136,7 +136,7 @@
     if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics) {
       renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics);
       if (inMetrics.value.date) {
-        document.getElementById('inbound-metrics-sub').textContent = 'Receipts created today, ' + inMetrics.value.date;
+        document.getElementById('inbound-metrics-sub').textContent = 'Scheduled for today, ' + inMetrics.value.date;
       }
     } else {
       document.getElementById('inbound-metrics-grid').innerHTML = '<div class="metrics-placeholder">Sign in to view inbound metrics</div>';
