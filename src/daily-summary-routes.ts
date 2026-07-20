@@ -151,10 +151,6 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     const tab = encodeURIComponent(getTodaySheetTabName());
     const text = await fetchSheet(`https://docs.google.com/spreadsheets/d/${OUTBOUND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${tab}`);
     const lines = text.split('\n');
-    const today = getTodayRangeLA();
-    const todayDateStr = `${today.display.slice(6)}-${today.display.slice(0,2)}-${today.display.slice(3,5)}`;
-    // todayDateStr = "YYYY-MM-DD" but sheet uses "MM/DD/YYYY" format
-    const todayMMDDYYYY = today.display; // "MM/DD/YYYY"
 
     let outboundLivesCount = 0;
     let preloadsCount = 0;
@@ -197,12 +193,10 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
           preloadsCount++;
           preloadRows.push(row);
         } else if (status === 'SHIPPED') {
-          // Only count as "Preloads Shipped" if schedule pickup date matches today
-          const pickupDate = pickupDateTime.split(' ')[0] ?? '';
-          if (pickupDate === todayMMDDYYYY) {
-            shippedPreloadCount++;
-            shippedPreloadRows.push(row);
-          }
+          // Business rule: Preloads Shipped counts shipped rows on the current daily tab,
+          // regardless of the Schedule Pick Up Date & Time value.
+          shippedPreloadCount++;
+          shippedPreloadRows.push(row);
         }
       } else {
         if (i >= 3 && row.loadId.startsWith('78') && row.appointmentTime) {
