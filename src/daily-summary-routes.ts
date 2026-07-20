@@ -219,7 +219,8 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
     for (let i = 0; i < lines.length; i++) {
       const cells = parseCSVLine(lines[i]);
 
-      if (i > 3 && cells.length > 5 && cells[1]?.trim() === 'CARRIER' && cells[2]?.trim() === 'RN') {
+      // Detect drop/yard section: a repeated header row with CARRIER in col 1 after row 3
+      if (i > 3 && cells.length > 1 && cells[1]?.trim() === 'CARRIER') {
         inDropSection = true;
         continue;
       }
@@ -237,20 +238,21 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       const status = cells[6]?.trim() ?? '';
       const arrivalTime = cells[8]?.trim() ?? '';
 
-      if (!carrier && !reference) continue;
+      // Valid appointment row needs a carrier AND a 76-prefix reference
+      if (!carrier || !reference.startsWith('76')) continue;
 
       const row: PoRow = { po: reference, appointmentTime: lastAppointmentTime, carrier, rn, et, door, status, arrivalTime };
 
       if (inDropSection) {
         dropCount++;
-        if (reference.startsWith('76')) dropPoRows.push(row);
+        dropPoRows.push(row);
       } else {
         liveCount++;
-        if (reference.startsWith('76')) livePoRows.push(row);
+        livePoRows.push(row);
       }
     }
 
-    res.json({ liveCount, dropCount, livePoRows, dropPoRows, error: null });
+    res.json({ liveCount: livePoRows.length, dropCount: dropPoRows.length, livePoRows, dropPoRows, error: null });
   } catch (e: any) {
     res.json({ liveCount: null, dropCount: null, livePoRows: [], dropPoRows: [], error: e.message });
   }
