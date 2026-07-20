@@ -151,6 +151,10 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     const tab = encodeURIComponent(getTodaySheetTabName());
     const text = await fetchSheet(`https://docs.google.com/spreadsheets/d/${OUTBOUND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${tab}`);
     const lines = text.split('\n');
+    const today = getTodayRangeLA();
+    const todayDateStr = `${today.display.slice(6)}-${today.display.slice(0,2)}-${today.display.slice(3,5)}`;
+    // todayDateStr = "YYYY-MM-DD" but sheet uses "MM/DD/YYYY" format
+    const todayMMDDYYYY = today.display; // "MM/DD/YYYY"
 
     let outboundLivesCount = 0;
     let preloadsCount = 0;
@@ -159,7 +163,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     let inPreloadSection = false;
     let lastAppt = '';
 
-    interface Row { dn: string; status: string; carrier: string; loadNo: string; appointmentTime: string; door: string; loadId: string; }
+    interface Row { dn: string; status: string; carrier: string; loadNo: string; appointmentTime: string; door: string; loadId: string; pickupDateTime: string; }
     const liveRows: Row[] = [];
     const preloadRows: Row[] = [];
     const shippedLiveRows: Row[] = [];
@@ -175,6 +179,8 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
       const appt = (cells[0] ?? '').trim();
       if (appt) lastAppt = appt;
 
+      const pickupDateTime = (cells[18] ?? '').trim();
+
       const row: Row = {
         dn: (cells[2] ?? '').trim(),
         status: (cells[6] ?? '').trim(),
@@ -183,6 +189,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
         appointmentTime: lastAppt,
         door: (cells[5] ?? '').trim(),
         loadId: (cells[7] ?? '').trim(),
+        pickupDateTime,
       };
 
       if (inPreloadSection) {
@@ -190,8 +197,12 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
           preloadsCount++;
           preloadRows.push(row);
         } else if (status === 'SHIPPED') {
-          shippedPreloadCount++;
-          shippedPreloadRows.push(row);
+          // Only count as "Preloads Shipped" if schedule pickup date matches today
+          const pickupDate = pickupDateTime.split(' ')[0] ?? '';
+          if (pickupDate === todayMMDDYYYY) {
+            shippedPreloadCount++;
+            shippedPreloadRows.push(row);
+          }
         }
       } else {
         if (i >= 3 && row.loadId.startsWith('78') && row.appointmentTime) {
