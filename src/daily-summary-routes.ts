@@ -332,11 +332,21 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
       statuses: [status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
       appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
     }, auth);
-    const orders = (data?.list ?? []).map((o: any) => ({
-      id: o.id, dn: o.orderNo ?? o.referenceNo ?? o.id ?? '', referenceNo: o.referenceNo ?? '',
-      status: o.status, createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '',
-      loadId: o.loadId ?? '', shipTo: o.shipTo ?? '',
-    }));
+    const orders = (data?.list ?? []).map((o: any) => {
+      const rawDn = o.orderNo ?? o.dnNo ?? o.customerOrderNo ?? '';
+      let dn = '';
+      const sixDigitMatch = rawDn.match(/(\d{6})/);
+      if (sixDigitMatch) {
+        dn = 'DN-' + sixDigitMatch[1];
+      } else if (rawDn) {
+        dn = rawDn;
+      }
+      return {
+        id: o.id, dn, referenceNo: o.referenceNo ?? '',
+        status: o.status, createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '',
+        loadId: o.loadId ?? '', shipTo: o.shipTo ?? '',
+      };
+    });
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {
     res.json({ totalCount: null, orders: [], error: e.message });
