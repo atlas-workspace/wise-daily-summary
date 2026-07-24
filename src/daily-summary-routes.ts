@@ -337,6 +337,7 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
       const candidates = [
         o.orderNo, o.dnNo, o.dnNumber, o.dn, o.customerOrderNo,
         o.referenceNo, o.referenceNumber, o.poNo, o.soNo, o.shipperReference,
+        o.id,
       ];
       let dn = '';
       // First pass: look for explicit DN-###### or DN###### pattern
@@ -348,23 +349,15 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
           break;
         }
       }
-      // Second pass: if no DN pattern found, look for a standalone 6-digit number
-      // in order-number-like fields (not internal IDs which are longer)
+      // Second pass: if no DN pattern found, look for a standalone 5-6 digit number
       if (!dn) {
         for (const val of candidates) {
           if (!val || typeof val !== 'string') continue;
-          const numMatch = val.match(/^(\d{6})$/);
+          const numMatch = val.match(/^(\d{5,6})$/);
           if (numMatch) {
             dn = 'DN-' + numMatch[1];
             break;
           }
-        }
-      }
-      // Third pass: check the WMS id field itself if it matches DN pattern
-      if (!dn && o.id && typeof o.id === 'string') {
-        const idMatch = o.id.match(/DN-?(\d{6})/i);
-        if (idMatch) {
-          dn = 'DN-' + idMatch[1];
         }
       }
       return {
@@ -425,6 +418,7 @@ router.get('/partial-shipped', requireAuth, async (req: Request, res: Response) 
       const candidates = [
         o.orderNo, o.dnNo, o.dnNumber, o.dn, o.customerOrderNo,
         o.referenceNo, o.referenceNumber, o.poNo, o.soNo, o.shipperReference,
+        o.id,
       ];
       let dn = '';
       for (const val of candidates) {
@@ -435,13 +429,9 @@ router.get('/partial-shipped', requireAuth, async (req: Request, res: Response) 
       if (!dn) {
         for (const val of candidates) {
           if (!val || typeof val !== 'string') continue;
-          const numMatch = val.match(/^(\d{6})$/);
+          const numMatch = val.match(/^(\d{5,6})$/);
           if (numMatch) { dn = 'DN-' + numMatch[1]; break; }
         }
-      }
-      if (!dn && o.id && typeof o.id === 'string') {
-        const idMatch = o.id.match(/DN-?(\d{6})/i);
-        if (idMatch) dn = 'DN-' + idMatch[1];
       }
       return {
         id: o.id, dn, referenceNo: o.referenceNo ?? '', status: o.status,
