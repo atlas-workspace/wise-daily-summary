@@ -330,7 +330,7 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
   try {
     const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
       statuses: [status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
-      createdTimeFrom: today.from, createdTimeTo: today.to,
+      appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
     }, auth);
     const orders = (data?.list ?? []).map((o: any) => ({
       id: o.id, dn: o.orderNo ?? o.referenceNo ?? o.id ?? '', referenceNo: o.referenceNo ?? '',
