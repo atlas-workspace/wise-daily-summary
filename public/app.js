@@ -78,12 +78,12 @@
   function renderOrderTable(orders, containerId, statusLabel) {
     var el = document.getElementById(containerId);
     if (!orders || orders.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No ' + escapeHtml(statusLabel) + ' orders</p>'; el.hidden = false; return; }
-    var html = '<table><thead><tr><th>DN</th><th>Load ID</th><th>Reference</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
+    var html = '<table><thead><tr><th>DN</th><th>Reference # (78)</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
     orders.forEach(function (o) {
       var dnVal = o.dn || o.id || '—';
       var dnCell = o.id ? '<a class="dn-link" href="https://unis.item.com/wms/outbound/order/view/' + escapeHtml(o.id) + '" target="_blank" rel="noopener">' + escapeHtml(dnVal) + '</a>' : escapeHtml(dnVal);
       var created = o.createdTime ? new Date(o.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-      html += '<tr><td>' + dnCell + '</td><td>' + escapeHtml(o.loadId || '—') + '</td><td>' + escapeHtml(o.referenceNo || '—') + '</td><td><span class="status-badge ' + statusClass(o.status) + '">' + escapeHtml(o.status || statusLabel) + '</span></td><td>' + escapeHtml(o.loadNo || '—') + '</td><td>' + escapeHtml(created) + '</td></tr>';
+      html += '<tr><td>' + dnCell + '</td><td>' + escapeHtml(o.loadId || '—') + '</td><td><span class="status-badge ' + statusClass(o.status) + '">' + escapeHtml(o.status || statusLabel) + '</span></td><td>' + escapeHtml(o.loadNo || '—') + '</td><td>' + escapeHtml(created) + '</td></tr>';
     });
     html += '</tbody></table>';
     el.innerHTML = html;
