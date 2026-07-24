@@ -78,7 +78,7 @@
   function renderOrderTable(orders, containerId, statusLabel) {
     var el = document.getElementById(containerId);
     if (!orders || orders.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No ' + escapeHtml(statusLabel) + ' orders</p>'; el.hidden = false; return; }
-    var html = '<table><thead><tr><th>DN</th><th>Reference # (78)</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
+    var html = '<table><thead><tr><th>DN</th><th>Load ID</th><th>Status</th><th>Load #</th><th>Created</th></tr></thead><tbody>';
     orders.forEach(function (o) {
       var dnVal = o.dn || o.id || '—';
       var dnCell = o.id ? '<a class="dn-link" href="https://unis.item.com/wms/outbound/order/view/' + escapeHtml(o.id) + '" target="_blank" rel="noopener">' + escapeHtml(dnVal) + '</a>' : escapeHtml(dnVal);
