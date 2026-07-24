@@ -333,8 +333,9 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
       createdTimeFrom: today.from, createdTimeTo: today.to,
     }, auth);
     const orders = (data?.list ?? []).map((o: any) => ({
-      id: o.id, referenceNo: o.referenceNo ?? '', status: o.status,
-      createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '', shipTo: o.shipTo ?? '',
+      id: o.id, dn: o.orderNo ?? o.referenceNo ?? o.id ?? '', referenceNo: o.referenceNo ?? '',
+      status: o.status, createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '',
+      loadId: o.loadId ?? '', shipTo: o.shipTo ?? '',
     }));
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {
