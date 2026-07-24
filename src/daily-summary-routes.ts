@@ -421,10 +421,33 @@ router.get('/partial-shipped', requireAuth, async (req: Request, res: Response) 
     const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
       statuses: ['PARTIAL_SHIPPED'], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
     }, auth);
-    const orders = (data?.list ?? []).map((o: any) => ({
-      id: o.id, referenceNo: o.referenceNo ?? '', status: o.status,
-      createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '', shipTo: o.shipTo ?? '',
-    }));
+    const orders = (data?.list ?? []).map((o: any) => {
+      const candidates = [
+        o.orderNo, o.dnNo, o.dnNumber, o.dn, o.customerOrderNo,
+        o.referenceNo, o.referenceNumber, o.poNo, o.soNo, o.shipperReference,
+      ];
+      let dn = '';
+      for (const val of candidates) {
+        if (!val || typeof val !== 'string') continue;
+        const dnMatch = val.match(/DN-?(\d{6})/i);
+        if (dnMatch) { dn = 'DN-' + dnMatch[1]; break; }
+      }
+      if (!dn) {
+        for (const val of candidates) {
+          if (!val || typeof val !== 'string') continue;
+          const numMatch = val.match(/^(\d{6})$/);
+          if (numMatch) { dn = 'DN-' + numMatch[1]; break; }
+        }
+      }
+      if (!dn && o.id && typeof o.id === 'string') {
+        const idMatch = o.id.match(/DN-?(\d{6})/i);
+        if (idMatch) dn = 'DN-' + idMatch[1];
+      }
+      return {
+        id: o.id, dn, referenceNo: o.referenceNo ?? '', status: o.status,
+        createdTime: o.createdTime ?? '', loadNo: o.loadNo ?? '', shipTo: o.shipTo ?? '',
+      };
+    });
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {
     res.json({ totalCount: null, orders: [], error: e.message });
