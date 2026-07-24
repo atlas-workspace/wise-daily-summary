@@ -147,10 +147,24 @@ body {
 }
 .grid-metric {
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 0.875rem; display: flex; flex-direction: column; gap: 0.25rem;
+  padding: 0.875rem; display: flex; flex-direction: column; gap: 0.25rem; position: relative;
 }
+.grid-metric.clickable { cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.grid-metric.clickable:hover { border-color: var(--text-muted); background: rgba(124, 92, 252, 0.03); }
+.grid-metric.active { border-color: var(--primary); background: var(--primary-ghost); }
 .grid-metric-label { font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; }
 .grid-metric-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.grid-metric-hint { font-size: 0.625rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; }
+.grid-metric-hint svg { width: 10px; height: 10px; transition: transform 0.2s; }
+.grid-metric.active .grid-metric-hint svg { transform: rotate(180deg); }
+.grid-metric.active .grid-metric-hint { color: var(--primary); }
+
+.detail-table .detail-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+}
+.detail-table .detail-header-title { font-size: 0.8125rem; font-weight: 600; color: var(--text); }
+.detail-table .detail-header-count { font-size: 0.6875rem; color: var(--text-muted); }
+.detail-table .detail-limit-note { font-size: 0.6875rem; color: var(--text-dim); text-align: center; padding: 0.5rem; margin-top: 0.5rem; }
 
 /* Detail Tables */
 .detail-table {

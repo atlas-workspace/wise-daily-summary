@@ -109,14 +109,19 @@
       el.innerHTML = '<div class="metrics-placeholder">Unable to load metrics</div>';
       return;
     }
+    var chevronSvg = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.5l3 3 3-3"/></svg>';
     var html = '';
     metrics.forEach(function (m) {
-      html += '<div class="grid-metric clickable" data-status="' + escapeHtml(m.status) + '"><div class="grid-metric-label">' + escapeHtml(m.label) + '</div><div class="grid-metric-value">' + (m.count != null ? m.count : '—') + '</div></div>';
+      html += '<div class="grid-metric clickable" data-status="' + escapeHtml(m.status) + '">'
+        + '<div class="grid-metric-label">' + escapeHtml(m.label) + '</div>'
+        + '<div class="grid-metric-value">' + (m.count != null ? m.count : '—') + '</div>'
+        + '<div class="grid-metric-hint">' + chevronSvg + ' View details</div>'
+        + '</div>';
     });
     el.innerHTML = html;
     if (clickHandler) {
       el.querySelectorAll('.grid-metric.clickable').forEach(function (card) {
-        card.addEventListener('click', function () { clickHandler(card.dataset.status); });
+        card.addEventListener('click', function () { clickHandler(card.dataset.status, card); });
       });
     }
   }
@@ -286,9 +291,16 @@
 
   // --- WMS Outbound Metric grid cell clicks ---
   var outboundMetricDetailStatus = null;
-  async function handleOutboundMetricClick(status) {
+  async function handleOutboundMetricClick(status, card) {
     var el = document.getElementById('outbound-metrics-detail');
+    var grid = document.getElementById('outbound-metrics-grid');
+
+    // Clear active state from all cells in this grid
+    grid.querySelectorAll('.grid-metric.active').forEach(function (c) { c.classList.remove('active'); });
+
     if (outboundMetricDetailStatus === status) { el.hidden = true; outboundMetricDetailStatus = null; return; }
+
+    card.classList.add('active');
     el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Loading...</p>';
     el.hidden = false;
     outboundMetricDetailStatus = status;
@@ -297,7 +309,12 @@
       if (res.status === 401) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Sign in to view details</p>'; return; }
       var data = await res.json();
       if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
-      renderOrderTable(data.orders, 'outbound-metrics-detail', status);
+      var totalCount = data.totalCount || 0;
+      var orders = data.orders || [];
+      var limitNote = totalCount > orders.length ? '<div class="detail-limit-note">Showing first ' + orders.length + ' of ' + totalCount + '</div>' : '';
+      var headerHtml = '<div class="detail-header"><span class="detail-header-title">' + escapeHtml(status.replace(/_/g, ' ')) + ' Orders</span><span class="detail-header-count">' + totalCount + ' total</span></div>';
+      renderOrderTable(orders, 'outbound-metrics-detail', status);
+      el.innerHTML = headerHtml + el.innerHTML + limitNote;
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
     }
@@ -305,9 +322,16 @@
 
   // --- WMS Inbound Metric grid cell clicks ---
   var inboundMetricDetailStatus = null;
-  async function handleInboundMetricClick(status) {
+  async function handleInboundMetricClick(status, card) {
     var el = document.getElementById('inbound-metrics-detail');
+    var grid = document.getElementById('inbound-metrics-grid');
+
+    // Clear active state from all cells in this grid
+    grid.querySelectorAll('.grid-metric.active').forEach(function (c) { c.classList.remove('active'); });
+
     if (inboundMetricDetailStatus === status) { el.hidden = true; inboundMetricDetailStatus = null; return; }
+
+    card.classList.add('active');
     el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Loading...</p>';
     el.hidden = false;
     inboundMetricDetailStatus = status;
@@ -316,7 +340,12 @@
       if (res.status === 401) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Sign in to view details</p>'; return; }
       var data = await res.json();
       if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
-      renderReceiptTable(data.receipts, 'inbound-metrics-detail', status);
+      var totalCount = data.totalCount || 0;
+      var receipts = data.receipts || [];
+      var limitNote = totalCount > receipts.length ? '<div class="detail-limit-note">Showing first ' + receipts.length + ' of ' + totalCount + '</div>' : '';
+      var headerHtml = '<div class="detail-header"><span class="detail-header-title">' + escapeHtml(status.replace(/_/g, ' ')) + ' Receipts</span><span class="detail-header-count">' + totalCount + ' total</span></div>';
+      renderReceiptTable(receipts, 'inbound-metrics-detail', status);
+      el.innerHTML = headerHtml + el.innerHTML + limitNote;
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
     }
@@ -336,6 +365,8 @@
     inboundDetailVisible = null;
     outboundMetricDetailStatus = null;
     inboundMetricDetailStatus = null;
+    // Clear active states on metric grids
+    document.querySelectorAll('.grid-metric.active').forEach(function (c) { c.classList.remove('active'); });
     fetchAll();
   });
 
