@@ -20,6 +20,34 @@ function parseCSVLine(line: string): string[] {
   return cells;
 }
 
+interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; }
+
+function parseStagedRows(lines: string[]): YardRow[] {
+  const leftHeaderIdx = lines.findIndex((line) => {
+    const cells = parseCSVLine(line);
+    const carrierHeader = (cells[0] ?? '').trim().toUpperCase();
+    const stagedHeader = (cells[2] ?? '').trim().toUpperCase();
+    return carrierHeader === 'CARRIER' && (stagedHeader.includes('STAGED') || stagedHeader.includes('LIVE') || stagedHeader.includes('RN'));
+  });
+
+  if (leftHeaderIdx < 0) return [];
+
+  const stagedRows: YardRow[] = [];
+  for (let i = leftHeaderIdx + 1; i < lines.length; i++) {
+    const cells = parseCSVLine(lines[i]);
+    const carrier = (cells[0] ?? '').trim();
+    const rn = (cells[2] ?? '').trim();
+    const reference = (cells[3] ?? '').trim();
+
+    if (!carrier && !rn && !reference) break;
+    if (!carrier || (!rn && !reference)) continue;
+
+    stagedRows.push({ carrier, rn, trailer: '', reference, date: (cells[5] ?? '').trim() });
+  }
+
+  return stagedRows;
+}
+
 const OUTBOUND_SHEET_ID = '1l3CCrUAP4_kl3Yx6gnn6MH9qbRYhOVW-u7sbp173678';
 const INBOUND_SHEET_ID = '1hrOvrEluNnkvmniIQYPeCCsBHgRRSLUtFrkFaudnCgo';
 const YARD_SHEET_ID = '1HvgWrskHiMCTpT57Jo8Jhe3LYkkP6s-bT9ON_V2Rpzg';
@@ -90,12 +118,8 @@ router.get('/yard', async (_req: Request, res: Response) => {
 
     let inYardCount = 0;
     let noRnCount = 0;
-    let stagedCount = 0;
-
-    interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; }
     const inYardRows: YardRow[] = [];
     const noRnRows: YardRow[] = [];
-    const stagedRows: YardRow[] = [];
 
     // Right table: col 12 = carrier, col 13 = RN, col 14 = trailer, col 15 = reference, col 16 = date
     for (let i = 2; i < lines.length; i++) {
@@ -110,36 +134,14 @@ router.get('/yard', async (_req: Request, res: Response) => {
       if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push(row); }
     }
 
-    // Left table: staged loads (stop at first blank gap)
-    let leftHeaderIdx = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const cells = parseCSVLine(lines[i]);
-      const c0 = (cells[0] ?? '').trim().toUpperCase();
-      const c2 = (cells[2] ?? '').trim().toUpperCase();
-      if (c0 === 'CARRIER' && (c2.includes('STAGED') || c2.includes('LIVE') || c2.includes('RN'))) {
-        leftHeaderIdx = i;
-        break;
-      }
+    // Left table: only the contiguous staged outbound section after its header.
+    const stagedRows = parseStagedRows(lines);
+    for (const row of stagedRows) {
+      const rnUpper = row.rn.toUpperCase().replace(/-/g, ' ');
+      if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push(row); }
     }
 
-    if (leftHeaderIdx >= 0) {
-      for (let i = leftHeaderIdx + 1; i < lines.length; i++) {
-        const cells = parseCSVLine(lines[i]);
-        const carrier = (cells[0] ?? '').trim();
-        const rn = (cells[2] ?? '').trim();
-        const ref = (cells[3] ?? '').trim();
-        if (!carrier && !rn && !ref) break;
-        if (!carrier) continue;
-        if (rn || ref) {
-          stagedCount++;
-          stagedRows.push({ carrier, rn, trailer: '', reference: ref, date: (cells[5] ?? '').trim() });
-        }
-        const rnUpper = rn.toUpperCase().replace(/-/g, ' ');
-        if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push({ carrier, rn, trailer: '', reference: ref, date: (cells[5] ?? '').trim() }); }
-      }
-    }
-
-    res.json({ inYardCount, noRnCount, stagedCount, inYardRows, noRnRows, stagedRows, error: null });
+    res.json({ inYardCount, noRnCount, stagedCount: stagedRows.length, inYardRows, noRnRows, stagedRows, error: null });
   } catch (e: any) {
     res.json({ inYardCount: null, noRnCount: null, stagedCount: null, inYardRows: [], noRnRows: [], stagedRows: [], error: e.message });
   }
