@@ -33,7 +33,10 @@
         <span id="user-display" class="badge badge-facility"></span>
       </div>
       <div class="header-right">
-        <span id="last-updated" class="text-muted text-sm"></span>
+        <div class="refresh-status" aria-live="polite">
+          <span id="last-updated" class="text-muted text-sm">Waiting for first refresh</span>
+          <span id="auto-refresh-status" class="text-muted text-sm">Auto-refreshes every 60 seconds</span>
+        </div>
         <button id="btn-refresh" class="btn-secondary btn-sm">Refresh</button>
         <button id="btn-logout" class="btn-secondary btn-sm">Sign Out</button>
       </div>

@@ -1,6 +1,7 @@
 (function () {
   'use strict';
 
+  var AUTO_REFRESH_INTERVAL_MS = 60000;
   var screens = { login: document.getElementById('screen-login'), dashboard: document.getElementById('screen-dashboard') };
 
   function showScreen(name) {
@@ -127,8 +128,8 @@
     }
   }
 
-  function updateTimestamp() {
-    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  function updateTimestamp(date) {
+    document.getElementById('last-updated').textContent = 'Updated ' + date.toLocaleTimeString();
   }
 
   // Data state
@@ -137,20 +138,109 @@
   var yardData = null;
   var partialShippedData = [];
   var commitFailedData = [];
+  var autoRefreshTimeoutId = null;
+  var countdownIntervalId = null;
+  var nextAutoRefreshAt = null;
+  var dashboardActive = false;
+  var isRefreshing = false;
 
-  async function fetchAll() {
-    updateTimestamp();
-    // Hide all detail panels on refresh
-    ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'outbound-detail', 'inbound-detail', 'outbound-metrics-detail', 'inbound-metrics-detail'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.hidden = true;
+  function setRefreshLoading(loading) {
+    var button = document.getElementById('btn-refresh');
+    button.disabled = loading;
+    button.textContent = loading ? 'Refreshing...' : 'Refresh';
+  }
+
+  function updateAutoRefreshStatus() {
+    var status = document.getElementById('auto-refresh-status');
+    if (!dashboardActive) {
+      status.textContent = 'Auto-refresh paused';
+      return;
+    }
+    if (isRefreshing || !nextAutoRefreshAt) {
+      status.textContent = 'Refreshing dashboard...';
+      return;
+    }
+    var seconds = Math.max(0, Math.ceil((nextAutoRefreshAt - Date.now()) / 1000));
+    status.textContent = 'Auto-refreshes every 60 seconds · next in ' + seconds + 's';
+  }
+
+  function clearAutoRefresh() {
+    if (autoRefreshTimeoutId) clearTimeout(autoRefreshTimeoutId);
+    if (countdownIntervalId) clearInterval(countdownIntervalId);
+    autoRefreshTimeoutId = null;
+    countdownIntervalId = null;
+    nextAutoRefreshAt = null;
+  }
+
+  function startAutoRefresh() {
+    clearAutoRefresh();
+    if (!dashboardActive) return;
+    nextAutoRefreshAt = Date.now() + AUTO_REFRESH_INTERVAL_MS;
+    updateAutoRefreshStatus();
+    countdownIntervalId = setInterval(updateAutoRefreshStatus, 1000);
+    autoRefreshTimeoutId = setTimeout(async function () {
+      autoRefreshTimeoutId = null;
+      await fetchAll({ preserveDetails: true });
+      if (dashboardActive) startAutoRefresh();
+    }, AUTO_REFRESH_INTERVAL_MS);
+  }
+
+  function findMetricCard(gridId, status) {
+    return Array.from(document.querySelectorAll('#' + gridId + ' .grid-metric')).find(function (card) {
+      return card.dataset.status === status;
     });
+  }
 
-    var [yardRes, outboundRes, inboundRes] = await Promise.allSettled([
-      fetch('/api/summary/yard').then(function (r) { return r.json(); }),
-      fetch('/api/summary/outbound-schedule').then(function (r) { return r.json(); }),
-      fetch('/api/summary/inbound-schedule').then(function (r) { return r.json(); }),
-    ]);
+  async function refreshOpenDetails() {
+    if (topDetailVisible === 'partial') renderOrderTable(partialShippedData, 'partial-shipped-detail', 'PARTIAL SHIPPED');
+    if (topDetailVisible === 'commit') renderOrderTable(commitFailedData, 'commit-failed-detail', 'COMMIT FAILED');
+    if (topDetailVisible === 'yard') renderYardTable(yardData ? yardData.inYardRows : [], 'yard-detail', 'Loads in Yard');
+    if (topDetailVisible === 'norn') renderYardTable(yardData ? yardData.noRnRows : [], 'yard-detail', 'No RN');
+    if (topDetailVisible === 'staged') renderYardTable(yardData ? yardData.stagedRows : [], 'yard-detail', 'Staged');
+
+    if (outboundDetailVisible === 'lives') renderDnTable(outboundData ? outboundData.liveRows : [], 'outbound-detail');
+    if (outboundDetailVisible === 'preloads') renderDnTable(outboundData ? outboundData.preloadRows : [], 'outbound-detail');
+    if (outboundDetailVisible === 'shipped') renderDnTable(outboundData ? outboundData.shippedLiveRows : [], 'outbound-detail');
+    if (outboundDetailVisible === 'shippedPre') renderDnTable(outboundData ? outboundData.shippedPreloadRows : [], 'outbound-detail');
+
+    if (inboundDetailVisible === 'live') renderPoTable(inboundData ? inboundData.livePoRows : [], 'inbound-detail');
+    if (inboundDetailVisible === 'drop') renderPoTable(inboundData ? inboundData.dropPoRows : [], 'inbound-detail');
+
+    if (outboundMetricDetailStatus) {
+      var outboundStatus = outboundMetricDetailStatus;
+      var outboundCard = findMetricCard('outbound-metrics-grid', outboundStatus);
+      outboundMetricDetailStatus = null;
+      if (outboundCard) await handleOutboundMetricClick(outboundStatus, outboundCard);
+    }
+
+    if (inboundMetricDetailStatus) {
+      var inboundStatus = inboundMetricDetailStatus;
+      var inboundCard = findMetricCard('inbound-metrics-grid', inboundStatus);
+      inboundMetricDetailStatus = null;
+      if (inboundCard) await handleInboundMetricClick(inboundStatus, inboundCard);
+    }
+  }
+
+  async function fetchAll(options) {
+    if (isRefreshing) return;
+    var preserveDetails = options && options.preserveDetails;
+    isRefreshing = true;
+    setRefreshLoading(true);
+    updateAutoRefreshStatus();
+
+    if (!preserveDetails) {
+      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'outbound-detail', 'inbound-detail', 'outbound-metrics-detail', 'inbound-metrics-detail'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.hidden = true;
+      });
+    }
+
+    try {
+      var [yardRes, outboundRes, inboundRes] = await Promise.allSettled([
+        fetch('/api/summary/yard').then(function (r) { return r.json(); }),
+        fetch('/api/summary/outbound-schedule').then(function (r) { return r.json(); }),
+        fetch('/api/summary/inbound-schedule').then(function (r) { return r.json(); }),
+      ]);
 
     if (yardRes.status === 'fulfilled' && !yardRes.value.error) {
       yardData = yardRes.value;
@@ -204,6 +294,14 @@
     if (commitRes.status === 'fulfilled' && commitRes.value.totalCount != null) {
       setVal('val-commit-failed', commitRes.value.totalCount);
       commitFailedData = commitRes.value.orders || [];
+    }
+
+      if (preserveDetails) await refreshOpenDetails();
+      updateTimestamp(new Date());
+    } finally {
+      isRefreshing = false;
+      setRefreshLoading(false);
+      updateAutoRefreshStatus();
     }
   }
 
@@ -352,23 +450,31 @@
     }
   }
 
-  // Init dashboard
-  function initDashboard(session) {
-    document.getElementById('user-display').textContent = session.username || 'Signed in';
-    document.getElementById('date-badge').textContent = 'Today, ' + new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', year: 'numeric' });
-    fetchAll();
-  }
-
-  // Refresh
-  document.getElementById('btn-refresh').addEventListener('click', function () {
+  function resetDetailState() {
     topDetailVisible = null;
     outboundDetailVisible = null;
     inboundDetailVisible = null;
     outboundMetricDetailStatus = null;
     inboundMetricDetailStatus = null;
-    // Clear active states on metric grids
-    document.querySelectorAll('.grid-metric.active').forEach(function (c) { c.classList.remove('active'); });
-    fetchAll();
+    document.querySelectorAll('.grid-metric.active').forEach(function (card) { card.classList.remove('active'); });
+  }
+
+  // Init dashboard
+  function initDashboard(session) {
+    dashboardActive = true;
+    clearAutoRefresh();
+    resetDetailState();
+    document.getElementById('user-display').textContent = session.username || 'Signed in';
+    document.getElementById('date-badge').textContent = 'Today, ' + new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', year: 'numeric' });
+    fetchAll().then(startAutoRefresh);
+  }
+
+  // Refresh
+  document.getElementById('btn-refresh').addEventListener('click', async function () {
+    resetDetailState();
+    clearAutoRefresh();
+    await fetchAll();
+    startAutoRefresh();
   });
 
   // Check session on load
@@ -382,6 +488,9 @@
         return;
       }
     } catch (e) {}
+    dashboardActive = false;
+    clearAutoRefresh();
+    updateAutoRefreshStatus();
     showScreen('login');
   }
 
@@ -418,6 +527,10 @@
 
   // Logout
   document.getElementById('btn-logout').addEventListener('click', async function () {
+    dashboardActive = false;
+    clearAutoRefresh();
+    resetDetailState();
+    updateAutoRefreshStatus();
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
     showScreen('login');
   });
