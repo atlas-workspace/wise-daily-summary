@@ -32,15 +32,14 @@ No facility selection is required. The bearer token is captured server-side and 
 |----------|---------|-------------|
 | `PORT` | `3000` | HTTP/WebSocket server port |
 | `NODE_ENV` | _(blank)_ | Set `production` for deployments: enforces a strong `COOKIE_SECRET`, adds the `Secure` cookie flag, disables `/simulate/*` routes |
-| `IAM_BASE_URL` | `https://unis.item.com/api/wms-bam` | IAM login service base URL |
-| `IAM_LOGIN_PATH` | `/auth/login-by-password` | Login endpoint path (POST with `{username, password}`) |
+| `IAM_BASE_URL` | `https://id.item.com` | IAM login and token refresh service base URL |
 | `COOKIE_SECRET` | `dev-secret-change-me` | HMAC secret for session cookie signing. **Required (32+ chars) when `NODE_ENV=production` — the server refuses to start otherwise** |
 | `LOGIN_RATE_LIMIT_MAX` | `10` | Max login attempts per IP per window |
 | `LOGIN_RATE_LIMIT_WINDOW_MS` | `900000` | Login rate-limit window (15 min) |
 | `WMS_BASE_URL` | `https://unis.item.com/api` | WMS API gateway base URL |
 | `WMS_AUTH_TOKEN` | _(blank)_ | Bearer token for the background poller (server-to-server). If blank, the poller does not start |
 | `TENANT_ID` | `LT` | Default tenant identifier |
-| `FACILITY_ID` | `LT_ORG-8125` | Default facility identifier |
+| `FACILITY_ID` | `LT_F14` | Default facility identifier |
 | `YMS_BASE_URL` | `https://unis.item.com/api` | YMS API base URL |
 | `TMS_BASE_URL` | `https://unis.item.com/api` | TMS/FMS API gateway base URL |
 | `TMS_HEALTH_PATH` | `/wms-bam/v1/web/user/info` | Read-only upstream path used by `/api/tms/health` |
@@ -67,10 +66,11 @@ No facility selection is required. The bearer token is captured server-side and 
 ## Authentication Flow
 
 1. User enters credentials in the browser
-2. Browser sends `POST /api/auth/login` with `{username, password}`
-3. Server calls `POST {IAM_BASE_URL}{IAM_LOGIN_PATH}` with `{username, password}`
-4. On success, server stores the IAM token in an in-memory session, sets a signed httpOnly cookie
-5. Browser never sees the raw token — only a signed session cookie
+2. Browser sends `POST /api/auth/login` with `{username,password}`
+3. Server calls `POST {IAM_BASE_URL}/auth/exchange-token` with the password grant
+4. Server stores the access token, refresh token, and expiry in an in-memory session and sets a signed httpOnly cookie
+5. Before expiry, the server refreshes through `GET {IAM_BASE_URL}/auth/token/refresh`
+6. Browser never sees the raw tokens — only a signed session cookie
 
 Session cookies are HMAC-SHA256 signed, httpOnly, SameSite=Strict.
 

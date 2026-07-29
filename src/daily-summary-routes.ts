@@ -91,6 +91,12 @@ async function fetchSheet(url: string): Promise<string> {
   return res.text();
 }
 
+class WmsSessionError extends Error {}
+
+function isWmsSessionError(error: unknown): error is WmsSessionError {
+  return error instanceof WmsSessionError;
+}
+
 async function wmsSearch(path: string, body: unknown, auth: AuthContext) {
   const res = await fetch(`${config.wms.baseUrl}${path}`, {
     method: 'POST',
@@ -103,8 +109,14 @@ async function wmsSearch(path: string, body: unknown, auth: AuthContext) {
     },
     body: JSON.stringify(body),
   });
-  const json: any = await res.json();
-  if (json.code !== 0 && json.success !== true) throw new Error(json.msg || `WMS error code ${json.code}`);
+  const json: any = await res.json().catch(() => ({}));
+  const message = String(json.msg || json.message || json.error || '');
+  if (res.status === 401 || res.status === 403 || /token.*(expired|invalid)|unauthorized|not authenticated/i.test(message)) {
+    throw new WmsSessionError('Session expired. Please sign in again.');
+  }
+  if (!res.ok || (String(json.code) !== '0' && json.success !== true)) {
+    throw new Error(message || `WMS request failed (${res.status})`);
+  }
   return json.data;
 }
 
@@ -276,6 +288,14 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
   }
 });
 
+// WMS-backed summary responses must never be served from browser or proxy caches.
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // --- WMS Outbound Metrics (auth required, scoped to today's schedule) ---
 router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
@@ -290,6 +310,15 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
         return data?.totalCount ?? 0;
       })
     );
+    const authFailure = results.find((result) => result.status === 'rejected' && isWmsSessionError(result.reason));
+    if (authFailure) {
+      res.status(401).json({ metrics: [], date: today.display, error: 'Session expired. Please sign in again.' });
+      return;
+    }
+    if (results.every((result) => result.status === 'rejected')) {
+      res.status(502).json({ metrics: [], date: today.display, error: 'Outbound metrics are temporarily unavailable.' });
+      return;
+    }
     const metrics = ORDER_STATUSES.map((s, i) => ({
       label: s.label, status: s.status,
       count: results[i].status === 'fulfilled' ? results[i].value : null,
@@ -308,12 +337,21 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
     const results = await Promise.allSettled(
       RECEIPT_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
-          statuses: [s.status], currentPage: 1, pageSize: 1,
+          statuses: [s.status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 1,
           appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
         }, auth);
         return data?.totalCount ?? 0;
       })
     );
+    const authFailure = results.find((result) => result.status === 'rejected' && isWmsSessionError(result.reason));
+    if (authFailure) {
+      res.status(401).json({ metrics: [], date: today.display, error: 'Session expired. Please sign in again.' });
+      return;
+    }
+    if (results.every((result) => result.status === 'rejected')) {
+      res.status(502).json({ metrics: [], date: today.display, error: 'Inbound metrics are temporarily unavailable.' });
+      return;
+    }
     const metrics = RECEIPT_STATUSES.map((s, i) => ({
       label: s.label, status: s.status,
       count: results[i].status === 'fulfilled' ? results[i].value : null,
@@ -370,17 +408,23 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
     });
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {
-    res.json({ totalCount: null, orders: [], error: e.message });
+    if (isWmsSessionError(e)) {
+      res.status(401).json({ totalCount: null, orders: [], error: e.message });
+      return;
+    }
+    res.status(502).json({ totalCount: null, orders: [], error: 'Outbound details are temporarily unavailable.' });
   }
 });
 
 // --- WMS Inbound Receipt Detail by Status (auth required) ---
 router.get('/inbound-receipts/:status', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
+  const today = getTodayRangeLA();
   const status = req.params.status;
   try {
     const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
-      statuses: [status], currentPage: 1, pageSize: 50,
+      statuses: [status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
+      appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
     }, auth);
     const receipts = (data?.list ?? []).map((r: any) => ({
       id: r.id, poNo: r.poNo ?? '', referenceNo: r.referenceNo ?? '', status: r.status,
@@ -388,7 +432,11 @@ router.get('/inbound-receipts/:status', requireAuth, async (req: Request, res: R
     }));
     res.json({ totalCount: data?.totalCount ?? 0, receipts, error: null });
   } catch (e: any) {
-    res.json({ totalCount: null, receipts: [], error: e.message });
+    if (isWmsSessionError(e)) {
+      res.status(401).json({ totalCount: null, receipts: [], error: e.message });
+      return;
+    }
+    res.status(502).json({ totalCount: null, receipts: [], error: 'Inbound details are temporarily unavailable.' });
   }
 });
 
@@ -425,7 +473,11 @@ router.get('/commit-failed', requireAuth, async (req: Request, res: Response) =>
     });
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {
-    res.json({ totalCount: null, orders: [], error: e.message });
+    if (isWmsSessionError(e)) {
+      res.status(401).json({ totalCount: null, orders: [], error: e.message });
+      return;
+    }
+    res.status(502).json({ totalCount: null, orders: [], error: 'Commit Failed details are temporarily unavailable.' });
   }
 });
 
@@ -462,7 +514,11 @@ router.get('/partial-shipped', requireAuth, async (req: Request, res: Response) 
     });
     res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
   } catch (e: any) {
-    res.json({ totalCount: null, orders: [], error: e.message });
+    if (isWmsSessionError(e)) {
+      res.status(401).json({ totalCount: null, orders: [], error: e.message });
+      return;
+    }
+    res.status(502).json({ totalCount: null, orders: [], error: 'Partial Shipped details are temporarily unavailable.' });
   }
 });
 

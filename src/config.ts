@@ -7,8 +7,9 @@ export const config = {
   isProduction,
 
   iam: {
-    baseUrl: process.env.IAM_BASE_URL || 'https://unis.item.com/api/wms-bam',
-    loginPath: process.env.IAM_LOGIN_PATH || '/auth/login-by-password',
+    baseUrl: process.env.IAM_BASE_URL || 'https://id.item.com',
+    loginPath: '/auth/exchange-token',
+    refreshPath: '/auth/token/refresh',
   },
 
   session: {

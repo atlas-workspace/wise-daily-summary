@@ -41,10 +41,12 @@ router.post('/login', loginRateLimiter, async (req, res) => {
   }
 
   try {
-    const token = await loginByPassword(username, password);
+    const tokens = await loginByPassword(username, password);
     const sid = createSessionId();
     const session: SessionData = {
-      token,
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenExpiresAt: tokens.expiresAt,
       tenantId: config.wms.tenantId,
       facilityId: config.wms.facilityId,
       username,

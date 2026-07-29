@@ -211,6 +211,7 @@
       var outboundCard = findMetricCard('outbound-metrics-grid', outboundStatus);
       outboundMetricDetailStatus = null;
       if (outboundCard) await handleOutboundMetricClick(outboundStatus, outboundCard);
+      else document.getElementById('outbound-metrics-detail').hidden = true;
     }
 
     if (inboundMetricDetailStatus) {
@@ -218,7 +219,35 @@
       var inboundCard = findMetricCard('inbound-metrics-grid', inboundStatus);
       inboundMetricDetailStatus = null;
       if (inboundCard) await handleInboundMetricClick(inboundStatus, inboundCard);
+      else document.getElementById('inbound-metrics-detail').hidden = true;
     }
+  }
+
+  function renderMetricsUnavailable(gridId, message) {
+    document.getElementById(gridId).innerHTML = '<div class="metrics-placeholder">' + escapeHtml(message) + '</div>';
+  }
+
+  async function fetchWmsJson(path) {
+    var separator = path.includes('?') ? '&' : '?';
+    var response = await fetch(path + separator + '_=' + Date.now(), {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    var data = await response.json().catch(function () { return {}; });
+    if (!response.ok) {
+      var error = new Error(data.error || 'WMS data is temporarily unavailable.');
+      error.status = response.status;
+      error.payload = data;
+      throw error;
+    }
+    return data;
+  }
+
+  function getMetricsUnavailableMessage(result, sectionName) {
+    if (result.status === 'rejected' && result.reason && result.reason.status === 401) {
+      return 'Session expired. Sign out and sign in again.';
+    }
+    return sectionName + ' metrics are temporarily unavailable. Refresh to try again.';
   }
 
   async function fetchAll(options) {
@@ -263,37 +292,46 @@
       setVal('val-inbound-drop', inboundData.dropCount);
     }
 
-    // Auth-required WMS metrics
+    // Auth-required WMS metrics are fetched on every manual and automatic refresh.
     var [outMetrics, inMetrics, partialRes, commitRes] = await Promise.allSettled([
-      fetch('/api/summary/outbound-metrics').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
-      fetch('/api/summary/inbound-metrics').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
-      fetch('/api/summary/partial-shipped').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
-      fetch('/api/summary/commit-failed').then(function (r) { if (r.status === 401) throw new Error('auth'); return r.json(); }),
+      fetchWmsJson('/api/summary/outbound-metrics'),
+      fetchWmsJson('/api/summary/inbound-metrics'),
+      fetchWmsJson('/api/summary/partial-shipped'),
+      fetchWmsJson('/api/summary/commit-failed'),
     ]);
 
-    if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics) {
+    if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics && !outMetrics.value.error) {
       renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics, handleOutboundMetricClick);
-      if (outMetrics.value.date) {
-        document.getElementById('outbound-metrics-sub').textContent = 'Orders created today, ' + outMetrics.value.date;
-      }
+      document.getElementById('outbound-metrics-sub').textContent = 'Scheduled for today, ' + outMetrics.value.date + ' · Click a status to view DN numbers';
     } else {
-      document.getElementById('outbound-metrics-grid').innerHTML = '<div class="metrics-placeholder">Sign in to view outbound metrics</div>';
+      renderMetricsUnavailable('outbound-metrics-grid', getMetricsUnavailableMessage(outMetrics, 'Outbound'));
+      var outboundErrorDate = outMetrics.status === 'rejected' && outMetrics.reason.payload ? outMetrics.reason.payload.date : null;
+      if (outboundErrorDate) document.getElementById('outbound-metrics-sub').textContent = 'Scheduled for today, ' + outboundErrorDate;
     }
 
-    if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics) {
+    if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics && !inMetrics.value.error) {
       renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics, handleInboundMetricClick);
+      document.getElementById('inbound-metrics-sub').textContent = 'Scheduled for today, ' + inMetrics.value.date + ' · Click a status to view receipts';
     } else {
-      document.getElementById('inbound-metrics-grid').innerHTML = '<div class="metrics-placeholder">Sign in to view inbound metrics</div>';
+      renderMetricsUnavailable('inbound-metrics-grid', getMetricsUnavailableMessage(inMetrics, 'Inbound'));
+      var inboundErrorDate = inMetrics.status === 'rejected' && inMetrics.reason.payload ? inMetrics.reason.payload.date : null;
+      if (inboundErrorDate) document.getElementById('inbound-metrics-sub').textContent = 'Scheduled for today, ' + inboundErrorDate;
     }
 
-    if (partialRes.status === 'fulfilled' && partialRes.value.totalCount != null) {
+    if (partialRes.status === 'fulfilled' && partialRes.value.totalCount != null && !partialRes.value.error) {
       setVal('val-partial-shipped', partialRes.value.totalCount);
       partialShippedData = partialRes.value.orders || [];
+    } else {
+      setVal('val-partial-shipped', null);
+      partialShippedData = [];
     }
 
-    if (commitRes.status === 'fulfilled' && commitRes.value.totalCount != null) {
+    if (commitRes.status === 'fulfilled' && commitRes.value.totalCount != null && !commitRes.value.error) {
       setVal('val-commit-failed', commitRes.value.totalCount);
       commitFailedData = commitRes.value.orders || [];
+    } else {
+      setVal('val-commit-failed', null);
+      commitFailedData = [];
     }
 
       if (preserveDetails) await refreshOpenDetails();
@@ -404,9 +442,7 @@
     el.hidden = false;
     outboundMetricDetailStatus = status;
     try {
-      var res = await fetch('/api/summary/outbound-orders/' + encodeURIComponent(status));
-      if (res.status === 401) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Sign in to view details</p>'; return; }
-      var data = await res.json();
+      var data = await fetchWmsJson('/api/summary/outbound-orders/' + encodeURIComponent(status));
       if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
       var totalCount = data.totalCount || 0;
       var orders = data.orders || [];
@@ -415,7 +451,8 @@
       renderOrderTable(orders, 'outbound-metrics-detail', status);
       el.innerHTML = headerHtml + el.innerHTML + limitNote;
     } catch (e) {
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
+      var message = e && e.status === 401 ? 'Session expired. Sign out and sign in again.' : 'Details unavailable';
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(message) + '</p>';
     }
   }
 
@@ -435,9 +472,7 @@
     el.hidden = false;
     inboundMetricDetailStatus = status;
     try {
-      var res = await fetch('/api/summary/inbound-receipts/' + encodeURIComponent(status));
-      if (res.status === 401) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Sign in to view details</p>'; return; }
-      var data = await res.json();
+      var data = await fetchWmsJson('/api/summary/inbound-receipts/' + encodeURIComponent(status));
       if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
       var totalCount = data.totalCount || 0;
       var receipts = data.receipts || [];
@@ -446,7 +481,8 @@
       renderReceiptTable(receipts, 'inbound-metrics-detail', status);
       el.innerHTML = headerHtml + el.innerHTML + limitNote;
     } catch (e) {
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
+      var message = e && e.status === 401 ? 'Session expired. Sign out and sign in again.' : 'Details unavailable';
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(message) + '</p>';
     }
   }
 

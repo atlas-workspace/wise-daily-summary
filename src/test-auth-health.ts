@@ -5,19 +5,30 @@ import crypto from 'node:crypto';
 
 // --- Mock upstream before importing app modules ---
 
-let capturedRequests: Array<{ url: string; method: string; headers: Record<string, string> }> = [];
+let capturedRequests: Array<{ url: string; method: string; headers: Record<string, string>; body?: string }> = [];
 let mockUpstreamHandler: (req: IncomingMessage, res: ServerResponse) => void = defaultUpstreamHandler;
 
 function defaultUpstreamHandler(req: IncomingMessage, res: ServerResponse) {
-  capturedRequests.push({
+  const captured = {
     url: req.url || '',
     method: req.method || 'GET',
     headers: req.headers as Record<string, string>,
-  });
+    body: '',
+  };
+  capturedRequests.push(captured);
 
-  if (req.url?.includes('/auth/login-by-password')) {
+  if (req.url?.includes('/auth/exchange-token')) {
+    req.on('data', (chunk) => { captured.body += chunk.toString(); });
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ code: 0, data: { access_token: 'test-iam-token-abc123', refresh_token: 'test-refresh-token', expires_in: 3600 } }));
+    });
+    return;
+  }
+
+  if (req.url?.includes('/auth/token/refresh')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ code: 0, success: true, data: { accessToken: 'test-iam-token-abc123' } }));
+    res.end(JSON.stringify({ code: 0, data: { access_token: 'refreshed-iam-token', refresh_token: 'refreshed-refresh-token', expires_in: 3600 } }));
     return;
   }
 
@@ -52,8 +63,8 @@ async function startApp(): Promise<{ port: number; stop: () => Promise<void> }> 
   const baseUrl = `http://127.0.0.1:${mockUpstreamPort}`;
 
   process.env.PORT = '0';
-  process.env.IAM_BASE_URL = `${baseUrl}/wms-bam`;
-  process.env.IAM_LOGIN_PATH = '/auth/login-by-password';
+  process.env.IAM_BASE_URL = baseUrl;
+  delete process.env.IAM_LOGIN_PATH;
   process.env.COOKIE_SECRET = 'test-cookie-secret-32chars!!!!!';
   process.env.WMS_BASE_URL = baseUrl;
   process.env.YMS_BASE_URL = baseUrl;
@@ -61,7 +72,7 @@ async function startApp(): Promise<{ port: number; stop: () => Promise<void> }> 
   process.env.TMS_HEALTH_PATH = '/wms-bam/v1/web/user/info';
   process.env.TICKET_BASE_URL = baseUrl;
   process.env.TENANT_ID = 'LT';
-  process.env.FACILITY_ID = 'LT_ORG-8125';
+  process.env.FACILITY_ID = 'LT_F14';
   process.env.AUTH_DEBUG_RESPONSES = 'true';
   process.env.MOCK_WMS = 'false';
   process.env.TIMEZONE = 'America/Los_Angeles';
@@ -145,7 +156,7 @@ describe('Auth & Health Integration', () => {
   }
 
   describe('Token extraction from IAM login', () => {
-    it('extracts accessToken from data.accessToken in login response', async () => {
+    it('uses the fixed IAM exchange-token login contract', async () => {
       const res = await fetch(url('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,14 +167,19 @@ describe('Auth & Health Integration', () => {
       assert.equal(body.ok, true);
       assert.equal(body.username, 'testuser');
 
-      const loginReq = capturedRequests.find(r => r.url?.includes('/auth/login-by-password'));
+      const loginReq = capturedRequests.find(r => r.url?.includes('/auth/exchange-token'));
       assert.ok(loginReq, 'Login request was forwarded to IAM');
+      assert.deepEqual(JSON.parse(loginReq!.body || '{}'), {
+        grant_type: 'password',
+        username: 'testuser',
+        password: 'testpass',
+      });
     });
 
     it('returns error when IAM returns no token', async () => {
       mockUpstreamHandler = (req, res) => {
         capturedRequests.push({ url: req.url || '', method: req.method || '', headers: req.headers as any });
-        if (req.url?.includes('/auth/login-by-password')) {
+        if (req.url?.includes('/auth/exchange-token')) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ code: 0, data: { foo: 'bar' } }));
           return;
@@ -226,7 +242,7 @@ describe('Auth & Health Integration', () => {
       const res = await fetch(url('/api/wms/health'));
       assert.equal(res.status, 401);
       const body = await res.json() as any;
-      assert.equal(body.error, 'Not authenticated');
+      assert.match(body.error, /Session expired|not authenticated/i);
     });
 
     it('returns 401 for /api/yms/health without session', async () => {
@@ -280,7 +296,7 @@ describe('Auth & Health Integration', () => {
       assert.ok(ymsReq, 'YMS health request forwarded');
       assert.equal(ymsReq!.headers['authorization'], 'Bearer test-iam-token-abc123');
       assert.equal(ymsReq!.headers['x-tenant-id'], 'LT');
-      assert.equal(ymsReq!.headers['x-facility-id'], 'LT_ORG-8125');
+      assert.equal(ymsReq!.headers['x-facility-id'], 'LT_F14');
     });
 
     it('TMS health forwards Authorization: Bearer <IAM token>', async () => {

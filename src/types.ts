@@ -6,5 +6,7 @@ export interface AuthContext {
 }
 
 export interface SessionData extends AuthContext {
+  refreshToken: string;
+  tokenExpiresAt: number;
   createdAt: number;
 }
