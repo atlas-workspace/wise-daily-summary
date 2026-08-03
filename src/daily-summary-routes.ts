@@ -21,8 +21,9 @@ function parseCSVLine(line: string): string[] {
 }
 
 interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; }
+interface InboundStagedRow { carrier: string; rn: string; reference: string; door: string; date: string; notes: string; status: 'STAGED'; }
 
-function parseStagedRows(lines: string[]): YardRow[] {
+function parseInboundStagedRows(lines: string[]): InboundStagedRow[] {
   const leftHeaderIdx = lines.findIndex((line) => {
     const cells = parseCSVLine(line);
     const carrierHeader = (cells[0] ?? '').trim().toUpperCase();
@@ -32,7 +33,7 @@ function parseStagedRows(lines: string[]): YardRow[] {
 
   if (leftHeaderIdx < 0) return [];
 
-  const stagedRows: YardRow[] = [];
+  const stagedRows: InboundStagedRow[] = [];
   for (let i = leftHeaderIdx + 1; i < lines.length; i++) {
     const cells = parseCSVLine(lines[i]);
     const carrier = (cells[0] ?? '').trim();
@@ -42,7 +43,15 @@ function parseStagedRows(lines: string[]): YardRow[] {
     if (!carrier && !rn && !reference) break;
     if (!carrier || (!rn && !reference)) continue;
 
-    stagedRows.push({ carrier, rn, trailer: '', reference, date: (cells[5] ?? '').trim() });
+    stagedRows.push({
+      carrier,
+      rn,
+      reference,
+      door: (cells[4] ?? '').trim(),
+      date: (cells[5] ?? '').trim(),
+      notes: (cells[7] ?? '').trim(),
+      status: 'STAGED',
+    });
   }
 
   return stagedRows;
@@ -146,16 +155,39 @@ router.get('/yard', async (_req: Request, res: Response) => {
       if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push(row); }
     }
 
-    // Left table: only the contiguous staged outbound section after its header.
-    const stagedRows = parseStagedRows(lines);
-    for (const row of stagedRows) {
+    // Left table: only the first contiguous inbound staged/No-RN worklist after its header.
+    const inboundStagedRows = parseInboundStagedRows(lines);
+    for (const row of inboundStagedRows) {
       const rnUpper = row.rn.toUpperCase().replace(/-/g, ' ');
-      if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push(row); }
+      if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) {
+        noRnCount++;
+        noRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date });
+      }
     }
 
-    res.json({ inYardCount, noRnCount, stagedCount: stagedRows.length, inYardRows, noRnRows, stagedRows, error: null });
+    res.json({
+      inYardCount,
+      noRnCount,
+      inboundStagedCount: inboundStagedRows.length,
+      stagedCount: inboundStagedRows.length,
+      inYardRows,
+      noRnRows,
+      inboundStagedRows,
+      stagedRows: inboundStagedRows,
+      error: null,
+    });
   } catch (e: any) {
-    res.json({ inYardCount: null, noRnCount: null, stagedCount: null, inYardRows: [], noRnRows: [], stagedRows: [], error: e.message });
+    res.json({
+      inYardCount: null,
+      noRnCount: null,
+      inboundStagedCount: null,
+      stagedCount: null,
+      inYardRows: [],
+      noRnRows: [],
+      inboundStagedRows: [],
+      stagedRows: [],
+      error: e.message,
+    });
   }
 });
 

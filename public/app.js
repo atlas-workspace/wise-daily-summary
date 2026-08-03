@@ -76,6 +76,19 @@
     el.hidden = false;
   }
 
+  function renderInboundStagedTable(rows, containerId) {
+    var el = document.getElementById(containerId);
+    if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No inbound staged records</p>'; el.hidden = false; return; }
+    var html = '<p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;">Inbound Staged (' + rows.length + ')</p>';
+    html += '<table><thead><tr><th>PO / Reference</th><th>Status</th><th>Carrier</th><th>RN</th><th>Door</th><th>Date</th><th>Notes</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.reference || '—') + '</td><td><span class="status-badge ' + statusClass(r.status) + '">' + escapeHtml(r.status || 'STAGED') + '</span></td><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td><td>' + escapeHtml(r.date || '—') + '</td><td>' + escapeHtml(r.notes || '—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
   function renderOrderTable(orders, containerId, statusLabel) {
     var el = document.getElementById(containerId);
     if (!orders || orders.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No ' + escapeHtml(statusLabel) + ' orders</p>'; el.hidden = false; return; }
@@ -196,7 +209,7 @@
     if (topDetailVisible === 'commit') renderOrderTable(commitFailedData, 'commit-failed-detail', 'COMMIT FAILED');
     if (topDetailVisible === 'yard') renderYardTable(yardData ? yardData.inYardRows : [], 'yard-detail', 'Loads in Yard');
     if (topDetailVisible === 'norn') renderYardTable(yardData ? yardData.noRnRows : [], 'yard-detail', 'No RN');
-    if (topDetailVisible === 'staged') renderYardTable(yardData ? yardData.stagedRows : [], 'yard-detail', 'Staged');
+    if (topDetailVisible === 'staged') renderInboundStagedTable(yardData ? yardData.inboundStagedRows : [], 'yard-detail');
 
     if (outboundDetailVisible === 'lives') renderDnTable(outboundData ? outboundData.liveRows : [], 'outbound-detail');
     if (outboundDetailVisible === 'preloads') renderDnTable(outboundData ? outboundData.preloadRows : [], 'outbound-detail');
@@ -275,7 +288,7 @@
       yardData = yardRes.value;
       setVal('val-in-yard', yardData.inYardCount);
       setVal('val-no-rn', yardData.noRnCount);
-      setVal('val-staged', yardData.stagedCount);
+      setVal('val-staged', yardData.inboundStagedCount);
     }
 
     if (outboundRes.status === 'fulfilled' && !outboundRes.value.error) {
@@ -384,7 +397,7 @@
 
   document.getElementById('card-staged').addEventListener('click', function () {
     toggleTopDetail('staged', function () {
-      renderYardTable(yardData ? yardData.stagedRows : [], 'yard-detail', 'Staged');
+      renderInboundStagedTable(yardData ? yardData.inboundStagedRows : [], 'yard-detail');
     });
   });
 

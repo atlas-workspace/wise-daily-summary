@@ -8,7 +8,7 @@ export function getTodaySheetTabName(): string {
 
   const weekday = dayFormatter.format(now).toUpperCase();
   const month = monthFormatter.format(now).toUpperCase();
-  const dayNum = dayNumFormatter.format(now);
+  const dayNum = dayNumFormatter.format(now).padStart(2, "0");
 
   return `${weekday} - ${month} ${dayNum}`;
 }
