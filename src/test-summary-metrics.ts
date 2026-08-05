@@ -131,14 +131,18 @@ describe('WMS summary metrics', () => {
     const outboundResponse = await fetch(appUrl('/api/summary/outbound-metrics'), { headers: { Cookie: cookie } });
     assert.equal(outboundResponse.status, 200);
     const outboundBody = await outboundResponse.json() as any;
-    assert.equal(outboundBody.metrics.length, 15);
+    assert.equal(outboundBody.metrics.length, 16);
+    assert.equal(outboundBody.metrics[0].status, 'IMPORTED');
+    assert.equal(outboundBody.totalCount, 0);
+    assert.equal(outboundBody.unavailableStatusCount, 0);
+    assert.equal(typeof outboundBody.refreshedAt, 'string');
 
     const refreshRequests = capturedRequests.filter((request) => request.url.startsWith('/auth/token/refresh'));
     assert.equal(refreshRequests.length, 1);
     assert.match(refreshRequests[0].url, /refreshToken=refresh-token/);
 
     const outboundRequests = capturedRequests.filter((request) => request.url === '/wms-bam/outbound/order/search-by-paging');
-    assert.equal(outboundRequests.length, 15);
+    assert.equal(outboundRequests.length, 16);
     for (const request of outboundRequests) {
       assert.equal(request.headers.authorization, 'Bearer refreshed-token');
       assert.equal(request.headers['x-tenant-id'], 'LT');
@@ -154,6 +158,9 @@ describe('WMS summary metrics', () => {
     assert.equal(inboundResponse.status, 200);
     const inboundBody = await inboundResponse.json() as any;
     assert.equal(inboundBody.metrics.length, 10);
+    assert.equal(inboundBody.totalCount, 0);
+    assert.equal(inboundBody.unavailableStatusCount, 0);
+    assert.equal(typeof inboundBody.refreshedAt, 'string');
 
     const inboundRequests = capturedRequests.filter((request) => request.url === '/wms-bam/inbound/receipt/search-by-paging');
     assert.equal(inboundRequests.length, 10);

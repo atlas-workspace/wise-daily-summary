@@ -64,6 +64,7 @@ const YARD_SHEET_ID = '1HvgWrskHiMCTpT57Jo8Jhe3LYkkP6s-bT9ON_V2Rpzg';
 const PEPSICO_ID = 'ORG-368074';
 
 const ORDER_STATUSES = [
+  { label: 'Imported', status: 'IMPORTED' },
   { label: 'Open', status: 'OPEN' },
   { label: 'Committed', status: 'COMMITTED' },
   { label: 'Partial Committed', status: 'PARTIAL_COMMITTED' },
@@ -355,7 +356,9 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
       label: s.label, status: s.status,
       count: results[i].status === 'fulfilled' ? results[i].value : null,
     }));
-    res.json({ metrics, date: today.display, error: null });
+    const totalCount = metrics.reduce((sum, metric) => sum + (metric.count ?? 0), 0);
+    const unavailableStatusCount = metrics.filter((metric) => metric.count === null).length;
+    res.json({ metrics, totalCount, unavailableStatusCount, date: today.display, refreshedAt: new Date().toISOString(), error: null });
   } catch (e: any) {
     res.json({ metrics: [], date: today.display, error: e.message });
   }
@@ -388,7 +391,9 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
       label: s.label, status: s.status,
       count: results[i].status === 'fulfilled' ? results[i].value : null,
     }));
-    res.json({ metrics, date: today.display, error: null });
+    const totalCount = metrics.reduce((sum, metric) => sum + (metric.count ?? 0), 0);
+    const unavailableStatusCount = metrics.filter((metric) => metric.count === null).length;
+    res.json({ metrics, totalCount, unavailableStatusCount, date: today.display, refreshedAt: new Date().toISOString(), error: null });
   } catch (e: any) {
     res.json({ metrics: [], date: today.display, error: e.message });
   }

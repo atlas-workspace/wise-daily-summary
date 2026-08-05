@@ -294,6 +294,37 @@
     return sectionName + ' metrics are temporarily unavailable. Refresh to try again.';
   }
 
+  function formatMetricsRefreshTime(value) {
+    if (!value) return '';
+    return new Date(value).toLocaleTimeString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function setMetricsSuccessSubtitle(elementId, data, recordLabel, detailHint) {
+    var refreshedTime = formatMetricsRefreshTime(data.refreshedAt);
+    var refreshCopy = refreshedTime ? ' · Refreshed ' + refreshedTime : '';
+    if (data.unavailableStatusCount > 0) {
+      document.getElementById(elementId).textContent = 'Some PEPSICO WMS ' + recordLabel + ' statuses are temporarily unavailable for ' + data.date + refreshCopy;
+      return;
+    }
+    if (data.totalCount === 0) {
+      document.getElementById(elementId).textContent = 'No PEPSICO WMS ' + recordLabel + ' with appointment times for today, ' + data.date + refreshCopy;
+      return;
+    }
+    document.getElementById(elementId).textContent = 'Scheduled for today, ' + data.date + ' · ' + data.totalCount + ' total' + refreshCopy + ' · ' + detailHint;
+  }
+
+  function setMetricsUnavailableSubtitle(elementId, result, sectionName) {
+    if (result.status === 'rejected' && result.reason && result.reason.status === 401) {
+      document.getElementById(elementId).textContent = 'Session expired · Sign out and sign in again';
+      return;
+    }
+    document.getElementById(elementId).textContent = sectionName + ' metrics temporarily unavailable · Refresh to try again';
+  }
+
   async function fetchAll(options) {
     if (isRefreshing) return;
     var preserveDetails = options && options.preserveDetails;
@@ -353,20 +384,18 @@
 
     if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics && !outMetrics.value.error) {
       renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics, handleOutboundMetricClick);
-      document.getElementById('outbound-metrics-sub').textContent = 'Scheduled for today, ' + outMetrics.value.date + ' · Click a status to view DN numbers';
+      setMetricsSuccessSubtitle('outbound-metrics-sub', outMetrics.value, 'orders', 'Click a status to view DN numbers');
     } else {
       renderMetricsUnavailable('outbound-metrics-grid', getMetricsUnavailableMessage(outMetrics, 'Outbound'));
-      var outboundErrorDate = outMetrics.status === 'rejected' && outMetrics.reason.payload ? outMetrics.reason.payload.date : null;
-      if (outboundErrorDate) document.getElementById('outbound-metrics-sub').textContent = 'Scheduled for today, ' + outboundErrorDate;
+      setMetricsUnavailableSubtitle('outbound-metrics-sub', outMetrics, 'Outbound');
     }
 
     if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics && !inMetrics.value.error) {
       renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics, handleInboundMetricClick);
-      document.getElementById('inbound-metrics-sub').textContent = 'Scheduled for today, ' + inMetrics.value.date + ' · Click a status to view receipts';
+      setMetricsSuccessSubtitle('inbound-metrics-sub', inMetrics.value, 'receipts', 'Click a status to view receipts');
     } else {
       renderMetricsUnavailable('inbound-metrics-grid', getMetricsUnavailableMessage(inMetrics, 'Inbound'));
-      var inboundErrorDate = inMetrics.status === 'rejected' && inMetrics.reason.payload ? inMetrics.reason.payload.date : null;
-      if (inboundErrorDate) document.getElementById('inbound-metrics-sub').textContent = 'Scheduled for today, ' + inboundErrorDate;
+      setMetricsUnavailableSubtitle('inbound-metrics-sub', inMetrics, 'Inbound');
     }
 
     if (partialRes.status === 'fulfilled' && partialRes.value.totalCount != null && !partialRes.value.error) {
