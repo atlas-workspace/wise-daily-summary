@@ -131,6 +131,14 @@ async function wmsSearch(path: string, body: unknown, auth: AuthContext) {
 
 const router = Router();
 
+// Summary responses must always reflect the latest operational source data.
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // --- Yard with detail rows (no auth needed) ---
 router.get('/yard', async (_req: Request, res: Response) => {
   try {
@@ -318,14 +326,6 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
   } catch (e: any) {
     res.json({ liveCount: null, dropCount: null, livePoRows: [], dropPoRows: [], error: e.message });
   }
-});
-
-// WMS-backed summary responses must never be served from browser or proxy caches.
-router.use((_req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  next();
 });
 
 // --- WMS Outbound Metrics (auth required, scoped to today's schedule) ---

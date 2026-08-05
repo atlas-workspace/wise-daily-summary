@@ -89,6 +89,28 @@
     el.hidden = false;
   }
 
+  function renderYardUnavailable(containerId) {
+    var el = document.getElementById(containerId);
+    el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Yard tracker is temporarily unavailable. The dashboard will retry automatically.</p>';
+    el.hidden = false;
+  }
+
+  function setYardAvailability(available) {
+    document.getElementById('sub-in-yard').textContent = available ? 'Drops in yard · click for details' : 'Yard tracker unavailable · retrying automatically';
+    document.getElementById('sub-no-rn').textContent = available ? 'Missing receipt number · click for details' : 'Yard tracker unavailable · retrying automatically';
+    document.getElementById('sub-staged').textContent = available ? 'Inbound staged · click for details' : 'Yard tracker unavailable · retrying automatically';
+  }
+
+  function renderYardDetail(rows, title, inboundStaged) {
+    if (yardData && yardData.error) {
+      renderYardUnavailable('yard-detail');
+    } else if (inboundStaged) {
+      renderInboundStagedTable(rows, 'yard-detail');
+    } else {
+      renderYardTable(rows, 'yard-detail', title);
+    }
+  }
+
   function renderOrderTable(orders, containerId, statusLabel) {
     var el = document.getElementById(containerId);
     if (!orders || orders.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No ' + escapeHtml(statusLabel) + ' orders</p>'; el.hidden = false; return; }
@@ -207,9 +229,9 @@
   async function refreshOpenDetails() {
     if (topDetailVisible === 'partial') renderOrderTable(partialShippedData, 'partial-shipped-detail', 'PARTIAL SHIPPED');
     if (topDetailVisible === 'commit') renderOrderTable(commitFailedData, 'commit-failed-detail', 'COMMIT FAILED');
-    if (topDetailVisible === 'yard') renderYardTable(yardData ? yardData.inYardRows : [], 'yard-detail', 'Loads in Yard');
-    if (topDetailVisible === 'norn') renderYardTable(yardData ? yardData.noRnRows : [], 'yard-detail', 'No RN');
-    if (topDetailVisible === 'staged') renderInboundStagedTable(yardData ? yardData.inboundStagedRows : [], 'yard-detail');
+    if (topDetailVisible === 'yard') renderYardDetail(yardData ? yardData.inYardRows : [], 'Loads in Yard', false);
+    if (topDetailVisible === 'norn') renderYardDetail(yardData ? yardData.noRnRows : [], 'No RN', false);
+    if (topDetailVisible === 'staged') renderYardDetail(yardData ? yardData.inboundStagedRows : [], 'Inbound Staged', true);
 
     if (outboundDetailVisible === 'lives') renderDnTable(outboundData ? outboundData.liveRows : [], 'outbound-detail');
     if (outboundDetailVisible === 'preloads') renderDnTable(outboundData ? outboundData.preloadRows : [], 'outbound-detail');
@@ -238,6 +260,15 @@
 
   function renderMetricsUnavailable(gridId, message) {
     document.getElementById(gridId).innerHTML = '<div class="metrics-placeholder">' + escapeHtml(message) + '</div>';
+  }
+
+  async function fetchSummaryJson(path) {
+    var separator = path.includes('?') ? '&' : '?';
+    var response = await fetch(path + separator + '_=' + Date.now(), {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    return response.json();
   }
 
   async function fetchWmsJson(path) {
@@ -279,9 +310,9 @@
 
     try {
       var [yardRes, outboundRes, inboundRes] = await Promise.allSettled([
-        fetch('/api/summary/yard').then(function (r) { return r.json(); }),
-        fetch('/api/summary/outbound-schedule').then(function (r) { return r.json(); }),
-        fetch('/api/summary/inbound-schedule').then(function (r) { return r.json(); }),
+        fetchSummaryJson('/api/summary/yard'),
+        fetchSummaryJson('/api/summary/outbound-schedule'),
+        fetchSummaryJson('/api/summary/inbound-schedule'),
       ]);
 
     if (yardRes.status === 'fulfilled' && !yardRes.value.error) {
@@ -289,6 +320,13 @@
       setVal('val-in-yard', yardData.inYardCount);
       setVal('val-no-rn', yardData.noRnCount);
       setVal('val-staged', yardData.inboundStagedCount);
+      setYardAvailability(true);
+    } else {
+      yardData = yardRes.status === 'fulfilled' ? yardRes.value : { error: 'Yard tracker unavailable' };
+      setVal('val-in-yard', null);
+      setVal('val-no-rn', null);
+      setVal('val-staged', null);
+      setYardAvailability(false);
     }
 
     if (outboundRes.status === 'fulfilled' && !outboundRes.value.error) {
@@ -385,19 +423,19 @@
 
   document.getElementById('card-in-yard').addEventListener('click', function () {
     toggleTopDetail('yard', function () {
-      renderYardTable(yardData ? yardData.inYardRows : [], 'yard-detail', 'Loads in Yard');
+      renderYardDetail(yardData ? yardData.inYardRows : [], 'Loads in Yard', false);
     });
   });
 
   document.getElementById('card-no-rn').addEventListener('click', function () {
     toggleTopDetail('norn', function () {
-      renderYardTable(yardData ? yardData.noRnRows : [], 'yard-detail', 'No RN');
+      renderYardDetail(yardData ? yardData.noRnRows : [], 'No RN', false);
     });
   });
 
   document.getElementById('card-staged').addEventListener('click', function () {
     toggleTopDetail('staged', function () {
-      renderInboundStagedTable(yardData ? yardData.inboundStagedRows : [], 'yard-detail');
+      renderYardDetail(yardData ? yardData.inboundStagedRows : [], 'Inbound Staged', true);
     });
   });
 
