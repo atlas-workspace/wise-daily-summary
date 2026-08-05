@@ -14,7 +14,7 @@ let upstreamServer: Server;
 let upstreamPort = 0;
 let appServer: Server;
 let appPort = 0;
-let expectedRange: { from: string; to: string };
+let expectedRange: { from: string; to: string; fromDisplay: string; toDisplay: string };
 let rejectWmsRequests = false;
 
 function respondJson(res: ServerResponse, body: unknown, status = 200): void {
@@ -78,8 +78,8 @@ before(async () => {
   const { sessionMiddleware } = await import('./auth-middleware');
   const { authRouter } = await import('./auth-routes');
   const { summaryRouter } = await import('./daily-summary-routes');
-  const { getTodayRangeLA } = await import('./date-utils');
-  expectedRange = getTodayRangeLA();
+  const { getRollingAppointmentRangeLA } = await import('./date-utils');
+  expectedRange = getRollingAppointmentRangeLA();
 
   const app = express();
   app.use(express.json());
@@ -124,7 +124,17 @@ describe('WMS summary metrics', () => {
     assert.match(response.headers.get('cache-control') || '', /no-store/);
   });
 
-  it('refreshes IAM once and sends current LA appointment scope', async () => {
+  it('builds a DST-safe rolling LA appointment window', async () => {
+    const { getRollingAppointmentRangeLA } = await import('./date-utils');
+    assert.deepEqual(getRollingAppointmentRangeLA(7, 7, new Date('2026-08-05T15:00:00Z')), {
+      from: '2026-07-29T00:00:00',
+      to: '2026-08-12T23:59:59',
+      fromDisplay: '07/29/2026',
+      toDisplay: '08/12/2026',
+    });
+  });
+
+  it('refreshes IAM once and sends the rolling LA appointment scope', async () => {
     const cookie = await login();
     capturedRequests.length = 0;
 
@@ -136,6 +146,8 @@ describe('WMS summary metrics', () => {
     assert.equal(outboundBody.totalCount, 0);
     assert.equal(outboundBody.unavailableStatusCount, 0);
     assert.equal(typeof outboundBody.refreshedAt, 'string');
+    assert.equal(outboundBody.windowStart, expectedRange.fromDisplay);
+    assert.equal(outboundBody.windowEnd, expectedRange.toDisplay);
 
     const refreshRequests = capturedRequests.filter((request) => request.url.startsWith('/auth/token/refresh'));
     assert.equal(refreshRequests.length, 1);
@@ -161,6 +173,8 @@ describe('WMS summary metrics', () => {
     assert.equal(inboundBody.totalCount, 0);
     assert.equal(inboundBody.unavailableStatusCount, 0);
     assert.equal(typeof inboundBody.refreshedAt, 'string');
+    assert.equal(inboundBody.windowStart, expectedRange.fromDisplay);
+    assert.equal(inboundBody.windowEnd, expectedRange.toDisplay);
 
     const inboundRequests = capturedRequests.filter((request) => request.url === '/wms-bam/inbound/receipt/search-by-paging');
     assert.equal(inboundRequests.length, 10);
@@ -171,14 +185,30 @@ describe('WMS summary metrics', () => {
     }
 
     capturedRequests.length = 0;
-    const detailResponse = await fetch(appUrl('/api/summary/inbound-receipts/IMPORTED'), { headers: { Cookie: cookie } });
-    assert.equal(detailResponse.status, 200);
-    const detailRequest = capturedRequests.find((request) => request.url === '/wms-bam/inbound/receipt/search-by-paging');
-    assert.ok(detailRequest);
-    assert.equal(detailRequest.body.customerId, 'ORG-368074');
-    assert.equal(detailRequest.body.pageSize, 50);
-    assert.equal(detailRequest.body.appointmentTimeFrom, expectedRange.from);
-    assert.equal(detailRequest.body.appointmentTimeTo, expectedRange.to);
+    const outboundDetailResponse = await fetch(appUrl('/api/summary/outbound-orders/IMPORTED'), { headers: { Cookie: cookie } });
+    assert.equal(outboundDetailResponse.status, 200);
+    const outboundDetailBody = await outboundDetailResponse.json() as any;
+    assert.equal(outboundDetailBody.windowStart, expectedRange.fromDisplay);
+    assert.equal(outboundDetailBody.windowEnd, expectedRange.toDisplay);
+    const outboundDetailRequest = capturedRequests.find((request) => request.url === '/wms-bam/outbound/order/search-by-paging');
+    assert.ok(outboundDetailRequest);
+    assert.equal(outboundDetailRequest.body.customerId, 'ORG-368074');
+    assert.equal(outboundDetailRequest.body.pageSize, 50);
+    assert.equal(outboundDetailRequest.body.appointmentTimeFrom, expectedRange.from);
+    assert.equal(outboundDetailRequest.body.appointmentTimeTo, expectedRange.to);
+
+    capturedRequests.length = 0;
+    const inboundDetailResponse = await fetch(appUrl('/api/summary/inbound-receipts/IMPORTED'), { headers: { Cookie: cookie } });
+    assert.equal(inboundDetailResponse.status, 200);
+    const inboundDetailBody = await inboundDetailResponse.json() as any;
+    assert.equal(inboundDetailBody.windowStart, expectedRange.fromDisplay);
+    assert.equal(inboundDetailBody.windowEnd, expectedRange.toDisplay);
+    const inboundDetailRequest = capturedRequests.find((request) => request.url === '/wms-bam/inbound/receipt/search-by-paging');
+    assert.ok(inboundDetailRequest);
+    assert.equal(inboundDetailRequest.body.customerId, 'ORG-368074');
+    assert.equal(inboundDetailRequest.body.pageSize, 50);
+    assert.equal(inboundDetailRequest.body.appointmentTimeFrom, expectedRange.from);
+    assert.equal(inboundDetailRequest.body.appointmentTimeTo, expectedRange.to);
   });
 
   it('returns a session-expired response instead of blank metrics', async () => {

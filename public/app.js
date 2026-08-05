@@ -306,15 +306,17 @@
   function setMetricsSuccessSubtitle(elementId, data, recordLabel, detailHint) {
     var refreshedTime = formatMetricsRefreshTime(data.refreshedAt);
     var refreshCopy = refreshedTime ? ' · Refreshed ' + refreshedTime : '';
+    var windowCopy = data.windowStart + ' to ' + data.windowEnd;
+    var updateCopy = ' · Updates every 60 seconds';
     if (data.unavailableStatusCount > 0) {
-      document.getElementById(elementId).textContent = 'Some PEPSICO WMS ' + recordLabel + ' statuses are temporarily unavailable for ' + data.date + refreshCopy;
+      document.getElementById(elementId).textContent = 'Some PEPSICO WMS ' + recordLabel + ' statuses are temporarily unavailable for the schedule window ' + windowCopy + refreshCopy + updateCopy;
       return;
     }
     if (data.totalCount === 0) {
-      document.getElementById(elementId).textContent = 'No PEPSICO WMS ' + recordLabel + ' with appointment times for today, ' + data.date + refreshCopy;
+      document.getElementById(elementId).textContent = 'No PEPSICO WMS ' + recordLabel + ' scheduled from ' + windowCopy + refreshCopy + updateCopy;
       return;
     }
-    document.getElementById(elementId).textContent = 'Scheduled for today, ' + data.date + ' · ' + data.totalCount + ' total' + refreshCopy + ' · ' + detailHint;
+    document.getElementById(elementId).textContent = 'Scheduled from ' + windowCopy + ' · ' + data.totalCount + ' total' + refreshCopy + updateCopy + ' · ' + detailHint;
   }
 
   function setMetricsUnavailableSubtitle(elementId, result, sectionName) {

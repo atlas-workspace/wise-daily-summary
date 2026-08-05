@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from './auth-middleware';
 import { config } from './config';
-import { getTodaySheetTabName, getTodayRangeLA } from './date-utils';
+import { getTodaySheetTabName, getRollingAppointmentRangeLA } from './date-utils';
 import type { AuthContext } from './types';
 
 function parseCSVLine(line: string): string[] {
@@ -329,27 +329,27 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
   }
 });
 
-// --- WMS Outbound Metrics (auth required, scoped to today's schedule) ---
+// --- WMS Outbound Metrics (auth required, scoped to rolling appointment window) ---
 router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
-  const today = getTodayRangeLA();
+  const appointmentWindow = getRollingAppointmentRangeLA();
   try {
     const results = await Promise.allSettled(
       ORDER_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
           statuses: [s.status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 1,
-          appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
+          appointmentTimeFrom: appointmentWindow.from, appointmentTimeTo: appointmentWindow.to,
         }, auth);
         return data?.totalCount ?? 0;
       })
     );
     const authFailure = results.find((result) => result.status === 'rejected' && isWmsSessionError(result.reason));
     if (authFailure) {
-      res.status(401).json({ metrics: [], date: today.display, error: 'Session expired. Please sign in again.' });
+      res.status(401).json({ metrics: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Session expired. Please sign in again.' });
       return;
     }
     if (results.every((result) => result.status === 'rejected')) {
-      res.status(502).json({ metrics: [], date: today.display, error: 'Outbound metrics are temporarily unavailable.' });
+      res.status(502).json({ metrics: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Outbound metrics are temporarily unavailable.' });
       return;
     }
     const metrics = ORDER_STATUSES.map((s, i) => ({
@@ -358,33 +358,33 @@ router.get('/outbound-metrics', requireAuth, async (req: Request, res: Response)
     }));
     const totalCount = metrics.reduce((sum, metric) => sum + (metric.count ?? 0), 0);
     const unavailableStatusCount = metrics.filter((metric) => metric.count === null).length;
-    res.json({ metrics, totalCount, unavailableStatusCount, date: today.display, refreshedAt: new Date().toISOString(), error: null });
+    res.json({ metrics, totalCount, unavailableStatusCount, windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, refreshedAt: new Date().toISOString(), error: null });
   } catch (e: any) {
-    res.json({ metrics: [], date: today.display, error: e.message });
+    res.status(502).json({ metrics: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Outbound metrics are temporarily unavailable.' });
   }
 });
 
-// --- WMS Inbound Metrics (auth required, scoped to today's schedule) ---
+// --- WMS Inbound Metrics (auth required, scoped to rolling appointment window) ---
 router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
-  const today = getTodayRangeLA();
+  const appointmentWindow = getRollingAppointmentRangeLA();
   try {
     const results = await Promise.allSettled(
       RECEIPT_STATUSES.map(async (s) => {
         const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
           statuses: [s.status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 1,
-          appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
+          appointmentTimeFrom: appointmentWindow.from, appointmentTimeTo: appointmentWindow.to,
         }, auth);
         return data?.totalCount ?? 0;
       })
     );
     const authFailure = results.find((result) => result.status === 'rejected' && isWmsSessionError(result.reason));
     if (authFailure) {
-      res.status(401).json({ metrics: [], date: today.display, error: 'Session expired. Please sign in again.' });
+      res.status(401).json({ metrics: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Session expired. Please sign in again.' });
       return;
     }
     if (results.every((result) => result.status === 'rejected')) {
-      res.status(502).json({ metrics: [], date: today.display, error: 'Inbound metrics are temporarily unavailable.' });
+      res.status(502).json({ metrics: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Inbound metrics are temporarily unavailable.' });
       return;
     }
     const metrics = RECEIPT_STATUSES.map((s, i) => ({
@@ -393,21 +393,21 @@ router.get('/inbound-metrics', requireAuth, async (req: Request, res: Response) 
     }));
     const totalCount = metrics.reduce((sum, metric) => sum + (metric.count ?? 0), 0);
     const unavailableStatusCount = metrics.filter((metric) => metric.count === null).length;
-    res.json({ metrics, totalCount, unavailableStatusCount, date: today.display, refreshedAt: new Date().toISOString(), error: null });
+    res.json({ metrics, totalCount, unavailableStatusCount, windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, refreshedAt: new Date().toISOString(), error: null });
   } catch (e: any) {
-    res.json({ metrics: [], date: today.display, error: e.message });
+    res.status(502).json({ metrics: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Inbound metrics are temporarily unavailable.' });
   }
 });
 
 // --- WMS Outbound Order Detail by Status (auth required) ---
 router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
-  const today = getTodayRangeLA();
+  const appointmentWindow = getRollingAppointmentRangeLA();
   const status = req.params.status;
   try {
     const data = await wmsSearch('/wms-bam/outbound/order/search-by-paging', {
       statuses: [status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
-      appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
+      appointmentTimeFrom: appointmentWindow.from, appointmentTimeTo: appointmentWindow.to,
     }, auth);
     const orders = (data?.list ?? []).map((o: any) => {
       // Search multiple fields for a DN in DN-###### format
@@ -443,37 +443,37 @@ router.get('/outbound-orders/:status', requireAuth, async (req: Request, res: Re
         loadId: o.loadId ?? '', shipTo: o.shipTo ?? '',
       };
     });
-    res.json({ totalCount: data?.totalCount ?? 0, orders, error: null });
+    res.json({ totalCount: data?.totalCount ?? 0, orders, windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: null });
   } catch (e: any) {
     if (isWmsSessionError(e)) {
-      res.status(401).json({ totalCount: null, orders: [], error: e.message });
+      res.status(401).json({ totalCount: null, orders: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Session expired. Please sign in again.' });
       return;
     }
-    res.status(502).json({ totalCount: null, orders: [], error: 'Outbound details are temporarily unavailable.' });
+    res.status(502).json({ totalCount: null, orders: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Outbound details are temporarily unavailable.' });
   }
 });
 
 // --- WMS Inbound Receipt Detail by Status (auth required) ---
 router.get('/inbound-receipts/:status', requireAuth, async (req: Request, res: Response) => {
   const auth = req.authContext!;
-  const today = getTodayRangeLA();
+  const appointmentWindow = getRollingAppointmentRangeLA();
   const status = req.params.status;
   try {
     const data = await wmsSearch('/wms-bam/inbound/receipt/search-by-paging', {
       statuses: [status], customerId: PEPSICO_ID, currentPage: 1, pageSize: 50,
-      appointmentTimeFrom: today.from, appointmentTimeTo: today.to,
+      appointmentTimeFrom: appointmentWindow.from, appointmentTimeTo: appointmentWindow.to,
     }, auth);
     const receipts = (data?.list ?? []).map((r: any) => ({
       id: r.id, poNo: r.poNo ?? '', referenceNo: r.referenceNo ?? '', status: r.status,
       appointmentTime: r.appointmentTime ?? '', customerId: r.customerId ?? '',
     }));
-    res.json({ totalCount: data?.totalCount ?? 0, receipts, error: null });
+    res.json({ totalCount: data?.totalCount ?? 0, receipts, windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: null });
   } catch (e: any) {
     if (isWmsSessionError(e)) {
-      res.status(401).json({ totalCount: null, receipts: [], error: e.message });
+      res.status(401).json({ totalCount: null, receipts: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Session expired. Please sign in again.' });
       return;
     }
-    res.status(502).json({ totalCount: null, receipts: [], error: 'Inbound details are temporarily unavailable.' });
+    res.status(502).json({ totalCount: null, receipts: [], windowStart: appointmentWindow.fromDisplay, windowEnd: appointmentWindow.toDisplay, error: 'Inbound details are temporarily unavailable.' });
   }
 });
 
