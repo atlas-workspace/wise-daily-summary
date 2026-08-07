@@ -153,29 +153,6 @@
     el.hidden = false;
   }
 
-  function renderMetricsGrid(containerId, metrics, clickHandler) {
-    var el = document.getElementById(containerId);
-    if (!metrics || metrics.length === 0) {
-      el.innerHTML = '<div class="metrics-placeholder">Unable to load metrics</div>';
-      return;
-    }
-    var chevronSvg = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.5l3 3 3-3"/></svg>';
-    var html = '';
-    metrics.forEach(function (m) {
-      html += '<div class="grid-metric clickable" data-status="' + escapeHtml(m.status) + '">'
-        + '<div class="grid-metric-label">' + escapeHtml(m.label) + '</div>'
-        + '<div class="grid-metric-value">' + (m.count != null ? m.count : '—') + '</div>'
-        + '<div class="grid-metric-hint">' + chevronSvg + ' View details</div>'
-        + '</div>';
-    });
-    el.innerHTML = html;
-    if (clickHandler) {
-      el.querySelectorAll('.grid-metric.clickable').forEach(function (card) {
-        card.addEventListener('click', function () { clickHandler(card.dataset.status, card); });
-      });
-    }
-  }
-
   function updateTimestamp(date) {
     document.getElementById('last-updated').textContent = 'Updated ' + date.toLocaleTimeString();
   }
@@ -233,12 +210,6 @@
     }, AUTO_REFRESH_INTERVAL_MS);
   }
 
-  function findMetricCard(gridId, status) {
-    return Array.from(document.querySelectorAll('#' + gridId + ' .grid-metric')).find(function (card) {
-      return card.dataset.status === status;
-    });
-  }
-
   async function refreshOpenDetails() {
     if (topDetailVisible === 'partial') renderOrderTable(partialShippedData, 'partial-shipped-detail', 'PARTIAL SHIPPED');
     if (topDetailVisible === 'commit') renderOrderTable(commitFailedData, 'commit-failed-detail', 'COMMIT FAILED');
@@ -253,26 +224,6 @@
 
     if (inboundDetailVisible === 'live') renderPoTable(inboundData ? inboundData.livePoRows : [], 'inbound-detail');
     if (inboundDetailVisible === 'drop') renderPoTable(inboundData ? inboundData.dropPoRows : [], 'inbound-detail');
-
-    if (outboundMetricDetailStatus) {
-      var outboundStatus = outboundMetricDetailStatus;
-      var outboundCard = findMetricCard('outbound-metrics-grid', outboundStatus);
-      outboundMetricDetailStatus = null;
-      if (outboundCard) await handleOutboundMetricClick(outboundStatus, outboundCard);
-      else document.getElementById('outbound-metrics-detail').hidden = true;
-    }
-
-    if (inboundMetricDetailStatus) {
-      var inboundStatus = inboundMetricDetailStatus;
-      var inboundCard = findMetricCard('inbound-metrics-grid', inboundStatus);
-      inboundMetricDetailStatus = null;
-      if (inboundCard) await handleInboundMetricClick(inboundStatus, inboundCard);
-      else document.getElementById('inbound-metrics-detail').hidden = true;
-    }
-  }
-
-  function renderMetricsUnavailable(gridId, message) {
-    document.getElementById(gridId).innerHTML = '<div class="metrics-placeholder">' + escapeHtml(message) + '</div>';
   }
 
   async function fetchSummaryJson(path) {
@@ -300,49 +251,6 @@
     return data;
   }
 
-  function getMetricsUnavailableMessage(result, sectionName) {
-    if (result.status === 'rejected' && result.reason && result.reason.status === 401) {
-      return sectionName + ' metrics are temporarily unavailable.';
-    }
-    if (result.status === 'fulfilled' && result.value && result.value.error && !result.value.metrics) {
-      return result.value.error;
-    }
-    return sectionName + ' metrics are temporarily unavailable. Refresh to try again.';
-  }
-
-  function formatMetricsRefreshTime(value) {
-    if (!value) return '';
-    return new Date(value).toLocaleTimeString('en-US', {
-      timeZone: 'America/Los_Angeles',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  }
-
-  function setMetricsSuccessSubtitle(elementId, data, recordLabel, detailHint) {
-    var refreshedTime = formatMetricsRefreshTime(data.refreshedAt);
-    var refreshCopy = refreshedTime ? ' · Refreshed ' + refreshedTime : '';
-    var windowCopy = data.windowStart + ' to ' + data.windowEnd;
-    var updateCopy = ' · Updates every 60 seconds';
-    if (data.unavailableStatusCount > 0) {
-      document.getElementById(elementId).textContent = 'Some PEPSICO WMS ' + recordLabel + ' statuses are temporarily unavailable for the schedule window ' + windowCopy + refreshCopy + updateCopy;
-      return;
-    }
-    if (data.totalCount === 0) {
-      document.getElementById(elementId).textContent = 'No PEPSICO WMS ' + recordLabel + ' scheduled from ' + windowCopy + refreshCopy + updateCopy;
-      return;
-    }
-    document.getElementById(elementId).textContent = 'Scheduled from ' + windowCopy + ' · ' + data.totalCount + ' total' + refreshCopy + updateCopy + ' · ' + detailHint;
-  }
-
-  function setMetricsUnavailableSubtitle(elementId, result, sectionName) {
-    if (result.status === 'fulfilled' && result.value && result.value.error) {
-      document.getElementById(elementId).textContent = result.value.error;
-      return;
-    }
-    document.getElementById(elementId).textContent = sectionName + ' metrics temporarily unavailable · Refresh to try again';
-  }
-
   async function fetchAll(options) {
     if (isRefreshing) return;
     var preserveDetails = options && options.preserveDetails;
@@ -351,7 +259,7 @@
     updateAutoRefreshStatus();
 
     if (!preserveDetails) {
-      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'outbound-detail', 'inbound-detail', 'outbound-metrics-detail', 'inbound-metrics-detail'].forEach(function (id) {
+      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'outbound-detail', 'inbound-detail'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.hidden = true;
       });
@@ -405,29 +313,11 @@
       document.getElementById('sub-yesterday-no-rn').textContent = 'Inbound schedule unavailable';
     }
 
-    // Auth-required WMS metrics are fetched on every manual and automatic refresh.
-    var [outMetrics, inMetrics, partialRes, commitRes] = await Promise.allSettled([
-      fetchWmsJson('/api/summary/outbound-metrics'),
-      fetchWmsJson('/api/summary/inbound-metrics'),
+    // WMS-backed current-status metrics are fetched on every manual and automatic refresh.
+    var [partialRes, commitRes] = await Promise.allSettled([
       fetchWmsJson('/api/summary/partial-shipped'),
       fetchWmsJson('/api/summary/commit-failed'),
     ]);
-
-    if (outMetrics.status === 'fulfilled' && outMetrics.value.metrics && !outMetrics.value.error) {
-      renderMetricsGrid('outbound-metrics-grid', outMetrics.value.metrics, handleOutboundMetricClick);
-      setMetricsSuccessSubtitle('outbound-metrics-sub', outMetrics.value, 'orders', 'Click a status to view DN numbers');
-    } else {
-      renderMetricsUnavailable('outbound-metrics-grid', getMetricsUnavailableMessage(outMetrics, 'Outbound'));
-      setMetricsUnavailableSubtitle('outbound-metrics-sub', outMetrics, 'Outbound');
-    }
-
-    if (inMetrics.status === 'fulfilled' && inMetrics.value.metrics && !inMetrics.value.error) {
-      renderMetricsGrid('inbound-metrics-grid', inMetrics.value.metrics, handleInboundMetricClick);
-      setMetricsSuccessSubtitle('inbound-metrics-sub', inMetrics.value, 'receipts', 'Click a status to view receipts');
-    } else {
-      renderMetricsUnavailable('inbound-metrics-grid', getMetricsUnavailableMessage(inMetrics, 'Inbound'));
-      setMetricsUnavailableSubtitle('inbound-metrics-sub', inMetrics, 'Inbound');
-    }
 
     if (partialRes.status === 'fulfilled' && partialRes.value.totalCount != null && !partialRes.value.error) {
       setVal('val-partial-shipped', partialRes.value.totalCount);
@@ -543,70 +433,10 @@
     toggleInbound('drop', inboundData ? inboundData.dropPoRows : []);
   });
 
-  // --- WMS Outbound Metric grid cell clicks ---
-  var outboundMetricDetailStatus = null;
-  async function handleOutboundMetricClick(status, card) {
-    var el = document.getElementById('outbound-metrics-detail');
-    var grid = document.getElementById('outbound-metrics-grid');
-
-    // Clear active state from all cells in this grid
-    grid.querySelectorAll('.grid-metric.active').forEach(function (c) { c.classList.remove('active'); });
-
-    if (outboundMetricDetailStatus === status) { el.hidden = true; outboundMetricDetailStatus = null; return; }
-
-    card.classList.add('active');
-    el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Loading...</p>';
-    el.hidden = false;
-    outboundMetricDetailStatus = status;
-    try {
-      var data = await fetchWmsJson('/api/summary/outbound-orders/' + encodeURIComponent(status));
-      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(data.error) + '</p>'; return; }
-      var totalCount = data.totalCount || 0;
-      var orders = data.orders || [];
-      var limitNote = totalCount > orders.length ? '<div class="detail-limit-note">Showing first ' + orders.length + ' of ' + totalCount + '</div>' : '';
-      var headerHtml = '<div class="detail-header"><span class="detail-header-title">' + escapeHtml(status.replace(/_/g, ' ')) + ' Orders</span><span class="detail-header-count">' + totalCount + ' total</span></div>';
-      renderOrderTable(orders, 'outbound-metrics-detail', status);
-      el.innerHTML = headerHtml + el.innerHTML + limitNote;
-    } catch (e) {
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
-    }
-  }
-
-  // --- WMS Inbound Metric grid cell clicks ---
-  var inboundMetricDetailStatus = null;
-  async function handleInboundMetricClick(status, card) {
-    var el = document.getElementById('inbound-metrics-detail');
-    var grid = document.getElementById('inbound-metrics-grid');
-
-    // Clear active state from all cells in this grid
-    grid.querySelectorAll('.grid-metric.active').forEach(function (c) { c.classList.remove('active'); });
-
-    if (inboundMetricDetailStatus === status) { el.hidden = true; inboundMetricDetailStatus = null; return; }
-
-    card.classList.add('active');
-    el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Loading...</p>';
-    el.hidden = false;
-    inboundMetricDetailStatus = status;
-    try {
-      var data = await fetchWmsJson('/api/summary/inbound-receipts/' + encodeURIComponent(status));
-      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(data.error) + '</p>'; return; }
-      var totalCount = data.totalCount || 0;
-      var receipts = data.receipts || [];
-      var limitNote = totalCount > receipts.length ? '<div class="detail-limit-note">Showing first ' + receipts.length + ' of ' + totalCount + '</div>' : '';
-      var headerHtml = '<div class="detail-header"><span class="detail-header-title">' + escapeHtml(status.replace(/_/g, ' ')) + ' Receipts</span><span class="detail-header-count">' + totalCount + ' total</span></div>';
-      renderReceiptTable(receipts, 'inbound-metrics-detail', status);
-      el.innerHTML = headerHtml + el.innerHTML + limitNote;
-    } catch (e) {
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
-    }
-  }
-
   function resetDetailState() {
     topDetailVisible = null;
     outboundDetailVisible = null;
     inboundDetailVisible = null;
-    outboundMetricDetailStatus = null;
-    inboundMetricDetailStatus = null;
     document.querySelectorAll('.grid-metric.active').forEach(function (card) { card.classList.remove('active'); });
   }
 
