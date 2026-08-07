@@ -236,8 +236,8 @@
     if (topDetailVisible === 'yard') renderYardDetail(yardData ? yardData.inYardRows : [], 'Loads in Yard', false);
     if (topDetailVisible === 'norn') renderYardDetail(yardData ? yardData.noRnRows : [], 'No RN', false);
     if (topDetailVisible === 'staged') renderYardDetail(yardData ? yardData.inboundStagedRows : [], 'Inbound Staged', true);
-    if (topDetailVisible === 'missedInbound') renderMissedTable(inboundData ? inboundData.missedInboundRows : [], 'missed-inbound-detail', 'Missed Inbound Appointments', false);
-    if (topDetailVisible === 'missedOutbound') renderMissedTable(outboundData ? outboundData.missedOutboundRows : [], 'missed-outbound-detail', 'Missed Outbound Appointments', true);
+    if (topDetailVisible === 'missedInbound') renderMissedTable(inboundData ? inboundData.missedInboundRows : [], 'missed-inbound-detail', 'Missed Inbound Appointments ' + (inboundData ? inboundData.missedInboundDate || '' : ''), false);
+    if (topDetailVisible === 'missedOutbound') renderMissedTable(outboundData ? outboundData.missedOutboundRows : [], 'missed-outbound-detail', 'Missed Outbound Appointments ' + (outboundData ? outboundData.missedOutboundDate || '' : ''), true);
 
     if (outboundDetailVisible === 'lives') renderDnTable(outboundData ? outboundData.liveRows : [], 'outbound-detail');
     if (outboundDetailVisible === 'preloads') renderDnTable(outboundData ? outboundData.preloadRows : [], 'outbound-detail');
@@ -314,12 +314,12 @@
       setVal('val-preloads', outboundData.preloadsCount);
       setVal('val-shipped-live', outboundData.shippedLiveCount);
       setVal('val-shipped-preload', outboundData.shippedPreloadCount);
-      if (outboundData.missedOutboundCount != null) {
+      if (outboundData.missedOutboundCount != null && !outboundData.missedOutboundError) {
         setVal('val-missed-outbound', outboundData.missedOutboundCount);
-        document.getElementById('sub-missed-outbound').textContent = outboundData.missedOutboundCount > 0 ? 'Scheduled but not picked up · click for details' : 'No missed appointments · click for details';
+        document.getElementById('sub-missed-outbound').textContent = 'Missed on ' + (outboundData.missedOutboundDate || 'the previous day') + ' · click for details';
       } else {
         setVal('val-missed-outbound', null);
-        document.getElementById('sub-missed-outbound').textContent = 'Outbound schedule unavailable';
+        document.getElementById('sub-missed-outbound').textContent = 'Previous-day data unavailable';
       }
     } else {
       outboundData = outboundRes.status === 'fulfilled' ? outboundRes.value : null;
@@ -342,12 +342,12 @@
         setVal('val-yesterday-no-rn', null);
         document.getElementById('sub-yesterday-no-rn').textContent = 'Previous-day data unavailable';
       }
-      if (inboundData.missedInboundCount != null) {
+      if (inboundData.missedInboundCount != null && !inboundData.missedInboundError) {
         setVal('val-missed-inbound', inboundData.missedInboundCount);
-        document.getElementById('sub-missed-inbound').textContent = inboundData.missedInboundCount > 0 ? 'Scheduled but not arrived · click for details' : 'No missed appointments · click for details';
+        document.getElementById('sub-missed-inbound').textContent = 'Missed on ' + (inboundData.missedInboundDate || 'the previous day') + ' · click for details';
       } else {
         setVal('val-missed-inbound', null);
-        document.getElementById('sub-missed-inbound').textContent = 'Inbound schedule unavailable';
+        document.getElementById('sub-missed-inbound').textContent = 'Previous-day data unavailable';
       }
     } else {
       inboundData = inboundRes.status === 'fulfilled' ? inboundRes.value : null;
@@ -443,13 +443,13 @@
 
   document.getElementById('card-missed-inbound').addEventListener('click', function () {
     toggleTopDetail('missedInbound', function () {
-      renderMissedTable(inboundData ? inboundData.missedInboundRows : [], 'missed-inbound-detail', 'Missed Inbound Appointments', false);
+      renderMissedTable(inboundData ? inboundData.missedInboundRows : [], 'missed-inbound-detail', 'Missed Inbound Appointments ' + (inboundData ? inboundData.missedInboundDate || '' : ''), false);
     });
   });
 
   document.getElementById('card-missed-outbound').addEventListener('click', function () {
     toggleTopDetail('missedOutbound', function () {
-      renderMissedTable(outboundData ? outboundData.missedOutboundRows : [], 'missed-outbound-detail', 'Missed Outbound Appointments', true);
+      renderMissedTable(outboundData ? outboundData.missedOutboundRows : [], 'missed-outbound-detail', 'Missed Outbound Appointments ' + (outboundData ? outboundData.missedOutboundDate || '' : ''), true);
     });
   });
 
