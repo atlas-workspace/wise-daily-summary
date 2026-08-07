@@ -243,6 +243,7 @@
     if (outboundDetailVisible === 'preloads') renderDnTable(outboundData ? outboundData.preloadRows : [], 'outbound-detail');
     if (outboundDetailVisible === 'shipped') renderDnTable(outboundData ? outboundData.shippedLiveRows : [], 'outbound-detail');
     if (outboundDetailVisible === 'shippedPre') renderDnTable(outboundData ? outboundData.shippedPreloadRows : [], 'outbound-detail');
+    if (outboundLoadedDetailVisible) renderDnTable(outboundData ? outboundData.loadedRows : [], 'outbound-loaded-detail');
 
     if (inboundDetailVisible === 'live') renderPoTable(inboundData ? inboundData.livePoRows : [], 'inbound-detail');
     if (inboundDetailVisible === 'drop') renderPoTable(inboundData ? inboundData.dropPoRows : [], 'inbound-detail');
@@ -281,7 +282,7 @@
     updateAutoRefreshStatus();
 
     if (!preserveDetails) {
-      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'missed-inbound-detail', 'missed-outbound-detail', 'outbound-detail', 'inbound-detail'].forEach(function (id) {
+      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'missed-inbound-detail', 'missed-outbound-detail', 'outbound-detail', 'outbound-loaded-detail', 'inbound-detail'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.hidden = true;
       });
@@ -314,6 +315,13 @@
       setVal('val-preloads', outboundData.preloadsCount);
       setVal('val-shipped-live', outboundData.shippedLiveCount);
       setVal('val-shipped-preload', outboundData.shippedPreloadCount);
+      if (outboundData.loadedCount != null) {
+        setVal('val-outbound-loaded', outboundData.loadedCount);
+        document.getElementById('sub-outbound-loaded').textContent = outboundData.loadedCount > 0 ? 'Outbound loads currently loaded · click for details' : 'No loaded outbound loads · click for details';
+      } else {
+        setVal('val-outbound-loaded', null);
+        document.getElementById('sub-outbound-loaded').textContent = 'Outbound schedule unavailable';
+      }
       if (outboundData.missedOutboundCount != null && !outboundData.missedOutboundError) {
         setVal('val-missed-outbound', outboundData.missedOutboundCount);
         document.getElementById('sub-missed-outbound').textContent = 'Missed on ' + (outboundData.missedOutboundDate || 'the previous day') + ' · click for details';
@@ -327,6 +335,8 @@
       setVal('val-preloads', null);
       setVal('val-shipped-live', null);
       setVal('val-shipped-preload', null);
+      setVal('val-outbound-loaded', null);
+      document.getElementById('sub-outbound-loaded').textContent = 'Outbound schedule unavailable';
       setVal('val-missed-outbound', null);
       document.getElementById('sub-missed-outbound').textContent = 'Outbound schedule unavailable';
     }
@@ -475,6 +485,16 @@
     toggleOutbound('shippedPre', outboundData ? outboundData.shippedPreloadRows : []);
   });
 
+  // --- Outbound Loaded card toggle ---
+  var outboundLoadedDetailVisible = false;
+  document.getElementById('card-outbound-loaded').addEventListener('click', function () {
+    var el = document.getElementById('outbound-loaded-detail');
+    if (outboundLoadedDetailVisible) { el.hidden = true; outboundLoadedDetailVisible = false; return; }
+    renderDnTable(outboundData ? outboundData.loadedRows : [], 'outbound-loaded-detail');
+    el.hidden = false;
+    outboundLoadedDetailVisible = true;
+  });
+
   // --- Inbound schedule card toggles ---
   var inboundDetailVisible = null;
   function toggleInbound(key, rows) {
@@ -495,6 +515,7 @@
     topDetailVisible = null;
     outboundDetailVisible = null;
     inboundDetailVisible = null;
+    outboundLoadedDetailVisible = false;
     document.querySelectorAll('.grid-metric.active').forEach(function (card) { card.classList.remove('active'); });
   }
 

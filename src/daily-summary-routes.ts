@@ -230,6 +230,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     let preloadsCount = 0;
     let shippedLiveCount = 0;
     let shippedPreloadCount = 0;
+    let loadedCount = 0;
     let inPreloadSection = false;
     let lastAppt = '';
 
@@ -238,6 +239,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     const preloadRows: Row[] = [];
     const shippedLiveRows: Row[] = [];
     const shippedPreloadRows: Row[] = [];
+    const loadedRows: Row[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -262,6 +264,13 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
         loadId: (cells[7] ?? '').trim(),
         pickupDateTime,
       };
+
+      // Loaded card: any valid row on today's tab with status LOADED
+      // (live or preload section) counts as an outbound load currently loaded.
+      if (status === 'LOADED' && (row.dn || row.loadId || row.carrier)) {
+        loadedCount++;
+        loadedRows.push(row);
+      }
 
       if (inPreloadSection) {
         if (['PLANNED', 'PICKING', 'LOADED', 'COMMIT FAILED', 'STAGED'].includes(status)) {
@@ -349,9 +358,9 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
       missedOutboundError = e.message || 'Outbound schedule unavailable';
     }
 
-    res.json({ outboundLivesCount, preloadsCount, shippedLiveCount, shippedPreloadCount, missedOutboundCount, missedOutboundDate, missedOutboundRows, missedOutboundError, liveRows, preloadRows, shippedLiveRows, shippedPreloadRows, error: null });
+    res.json({ outboundLivesCount, preloadsCount, shippedLiveCount, shippedPreloadCount, loadedCount, loadedRows, missedOutboundCount, missedOutboundDate, missedOutboundRows, missedOutboundError, liveRows, preloadRows, shippedLiveRows, shippedPreloadRows, error: null });
   } catch (e: any) {
-    res.json({ outboundLivesCount: null, preloadsCount: null, shippedLiveCount: null, shippedPreloadCount: null, missedOutboundCount: null, missedOutboundDate: null, missedOutboundRows: [], missedOutboundError: null, liveRows: [], preloadRows: [], shippedLiveRows: [], shippedPreloadRows: [], error: e.message });
+    res.json({ outboundLivesCount: null, preloadsCount: null, shippedLiveCount: null, shippedPreloadCount: null, loadedCount: null, loadedRows: [], missedOutboundCount: null, missedOutboundDate: null, missedOutboundRows: [], missedOutboundError: null, liveRows: [], preloadRows: [], shippedLiveRows: [], shippedPreloadRows: [], error: e.message });
   }
 });
 
