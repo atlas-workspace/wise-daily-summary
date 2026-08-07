@@ -43,59 +43,29 @@
     </header>
 
     <main class="dashboard-content">
-      <section class="metric-cards">
-        <div class="card metric-card metric-violet clickable" id="card-partial-shipped">
-          <div class="metric-label">Partial Shipped</div>
-          <div class="metric-value" id="val-partial-shipped">—</div>
-          <div class="metric-sub">PEPSICO orders · click for DNs</div>
-        </div>
-        <div class="card metric-card metric-red clickable" id="card-commit-failed">
-          <div class="metric-label">Commit Failed</div>
-          <div class="metric-value" id="val-commit-failed">—</div>
-          <div class="metric-sub">PEPSICO orders · click for DNs</div>
-        </div>
-        <div class="card metric-card metric-amber clickable" id="card-in-yard">
-          <div class="metric-label">Loads in Yard</div>
-          <div class="metric-value" id="val-in-yard">—</div>
-          <div class="metric-sub" id="sub-in-yard">Drops in yard · click for details</div>
-        </div>
-        <div class="card metric-card metric-orange clickable" id="card-no-rn">
-          <div class="metric-label">No RN</div>
-          <div class="metric-value" id="val-no-rn">—</div>
-          <div class="metric-sub" id="sub-no-rn">Missing receipt number · click for details</div>
-        </div>
-        <div class="card metric-card metric-blue clickable" id="card-staged">
-          <div class="metric-label">Staged</div>
-          <div class="metric-value" id="val-staged">—</div>
-          <div class="metric-sub" id="sub-staged">Inbound staged · click for details</div>
-        </div>
-        <div class="card metric-card metric-slate clickable" id="card-yesterday-no-rn">
-          <div class="metric-label">No RN Arrived Yesterday</div>
-          <div class="metric-value" id="val-yesterday-no-rn">—</div>
-          <div class="metric-sub" id="sub-yesterday-no-rn">Arrived … · click for details</div>
-        </div>
-        <div class="card metric-card metric-rose clickable" id="card-missed-inbound">
-          <div class="metric-label">Missed Inbound Appts</div>
-          <div class="metric-value" id="val-missed-inbound">—</div>
-          <div class="metric-sub" id="sub-missed-inbound">Scheduled but not arrived · click for details</div>
-        </div>
-        <div class="card metric-card metric-rose clickable" id="card-missed-outbound">
-          <div class="metric-label">Missed Outbound Appts</div>
-          <div class="metric-value" id="val-missed-outbound">—</div>
-          <div class="metric-sub" id="sub-missed-outbound">Scheduled but not picked up · click for details</div>
-        </div>
-      </section>
-
-      <div id="partial-shipped-detail" class="detail-table" hidden></div>
-      <div id="commit-failed-detail" class="detail-table" hidden></div>
-      <div id="yard-detail" class="detail-table" hidden></div>
-      <div id="yesterday-no-rn-detail" class="detail-table" hidden></div>
-      <div id="missed-inbound-detail" class="detail-table" hidden></div>
-      <div id="missed-outbound-detail" class="detail-table" hidden></div>
-
       <section class="schedule-section">
-        <h2 class="section-title">Outbound Schedule</h2>
-        <div class="schedule-cards">
+        <h2 class="section-title">Outbound</h2>
+        <div class="metric-cards">
+          <div class="card metric-card metric-violet clickable" id="card-partial-shipped">
+            <div class="metric-label">Partial Shipped</div>
+            <div class="metric-value" id="val-partial-shipped">—</div>
+            <div class="metric-sub">PEPSICO orders · click for DNs</div>
+          </div>
+          <div class="card metric-card metric-red clickable" id="card-commit-failed">
+            <div class="metric-label">Commit Failed</div>
+            <div class="metric-value" id="val-commit-failed">—</div>
+            <div class="metric-sub">PEPSICO orders · click for DNs</div>
+          </div>
+          <div class="card metric-card metric-rose clickable" id="card-missed-outbound">
+            <div class="metric-label">Missed Outbound Appts</div>
+            <div class="metric-value" id="val-missed-outbound">—</div>
+            <div class="metric-sub" id="sub-missed-outbound">Scheduled but not picked up · click for details</div>
+          </div>
+          <div class="card metric-card metric-lime clickable" id="card-outbound-loaded">
+            <div class="metric-label">Outbound Loaded</div>
+            <div class="metric-value" id="val-outbound-loaded">—</div>
+            <div class="metric-sub" id="sub-outbound-loaded">Outbound loads currently loaded · click for details</div>
+          </div>
           <div class="card metric-card metric-indigo clickable" id="card-outbound-lives">
             <div class="metric-label">Outbound Lives</div>
             <div class="metric-value" id="val-outbound-lives">—</div>
@@ -116,19 +86,42 @@
             <div class="metric-value" id="val-shipped-preload">—</div>
             <div class="metric-sub">Preloads shipped today</div>
           </div>
-          <div class="card metric-card metric-lime clickable" id="card-outbound-loaded">
-            <div class="metric-label">Outbound Loaded</div>
-            <div class="metric-value" id="val-outbound-loaded">—</div>
-            <div class="metric-sub" id="sub-outbound-loaded">Outbound loads currently loaded · click for details</div>
-          </div>
         </div>
+        <div id="partial-shipped-detail" class="detail-table" hidden></div>
+        <div id="commit-failed-detail" class="detail-table" hidden></div>
+        <div id="missed-outbound-detail" class="detail-table" hidden></div>
         <div id="outbound-detail" class="detail-table" hidden></div>
         <div id="outbound-loaded-detail" class="detail-table" hidden></div>
       </section>
 
       <section class="schedule-section">
-        <h2 class="section-title">Inbound Schedule</h2>
-        <div class="schedule-cards">
+        <h2 class="section-title">Inbound</h2>
+        <div class="metric-cards">
+          <div class="card metric-card metric-amber clickable" id="card-in-yard">
+            <div class="metric-label">Loads in Yard</div>
+            <div class="metric-value" id="val-in-yard">—</div>
+            <div class="metric-sub" id="sub-in-yard">Drops in yard · click for details</div>
+          </div>
+          <div class="card metric-card metric-orange clickable" id="card-no-rn">
+            <div class="metric-label">No RN</div>
+            <div class="metric-value" id="val-no-rn">—</div>
+            <div class="metric-sub" id="sub-no-rn">Missing receipt number · click for details</div>
+          </div>
+          <div class="card metric-card metric-blue clickable" id="card-staged">
+            <div class="metric-label">Staged</div>
+            <div class="metric-value" id="val-staged">—</div>
+            <div class="metric-sub" id="sub-staged">Inbound staged · click for details</div>
+          </div>
+          <div class="card metric-card metric-slate clickable" id="card-yesterday-no-rn">
+            <div class="metric-label">No RN Arrived Yesterday</div>
+            <div class="metric-value" id="val-yesterday-no-rn">—</div>
+            <div class="metric-sub" id="sub-yesterday-no-rn">Arrived … · click for details</div>
+          </div>
+          <div class="card metric-card metric-rose clickable" id="card-missed-inbound">
+            <div class="metric-label">Missed Inbound Appts</div>
+            <div class="metric-value" id="val-missed-inbound">—</div>
+            <div class="metric-sub" id="sub-missed-inbound">Scheduled but not arrived · click for details</div>
+          </div>
           <div class="card metric-card metric-emerald clickable" id="card-inbound-live">
             <div class="metric-label">Live Scheduled</div>
             <div class="metric-value" id="val-inbound-live">—</div>
@@ -140,6 +133,9 @@
             <div class="metric-sub">Drop trailer appointments</div>
           </div>
         </div>
+        <div id="yard-detail" class="detail-table" hidden></div>
+        <div id="yesterday-no-rn-detail" class="detail-table" hidden></div>
+        <div id="missed-inbound-detail" class="detail-table" hidden></div>
         <div id="inbound-detail" class="detail-table" hidden></div>
       </section>
     </main>
