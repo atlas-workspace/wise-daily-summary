@@ -135,6 +135,8 @@ body {
 .metric-cyan .metric-value { color: #22d3ee; }
 .metric-slate { border-color: rgba(100, 116, 139, 0.2); }
 .metric-slate .metric-value { color: #94a3b8; }
+.metric-rose { border-color: rgba(244, 63, 94, 0.2); }
+.metric-rose .metric-value { color: #fb7185; }
 
 /* Schedule Sections */
 .schedule-section { margin-bottom: 2rem; }

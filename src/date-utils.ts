@@ -136,3 +136,37 @@ export function normalizeSheetDate(value: string): string | null {
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+
+/**
+ * Current time of day in America/Los_Angeles as minutes since midnight.
+ */
+export function getCurrentLATimeMinutes(now = new Date()): number {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")!.value) % 24;
+  const minute = Number(parts.find((p) => p.type === "minute")!.value);
+  return hour * 60 + minute;
+}
+
+/**
+ * Parse a sheet appointment time like "8:00 AM" / "12:30 PM" into minutes
+ * since midnight. Returns null when not parseable (e.g. date-like values).
+ */
+export function parseApptTimeToMinutes(value: string): number | null {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const m = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = Number(m[2]);
+  const suffix = m[3].toUpperCase();
+  if (suffix === "PM" && hour < 12) hour += 12;
+  if (suffix === "AM" && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}

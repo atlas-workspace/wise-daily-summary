@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { resolveWmsAuth } from './auth-middleware';
 import { config } from './config';
-import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, getSheetTabNameForDate, normalizeSheetDate } from './date-utils';
+import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, getSheetTabNameForDate, normalizeSheetDate, getCurrentLATimeMinutes, parseApptTimeToMinutes } from './date-utils';
 import { forceRenewServiceToken } from './service-auth';
 import type { AuthContext } from './types';
 
@@ -230,6 +230,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     let preloadsCount = 0;
     let shippedLiveCount = 0;
     let shippedPreloadCount = 0;
+    let missedOutboundCount = 0;
     let inPreloadSection = false;
     let lastAppt = '';
 
@@ -238,6 +239,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     const preloadRows: Row[] = [];
     const shippedLiveRows: Row[] = [];
     const shippedPreloadRows: Row[] = [];
+    const missedOutboundRows: Row[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -245,7 +247,8 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
       if (inPreloadSection && /^,CARRIER,DN/.test(line)) continue;
 
       const cells = parseCSVLine(line);
-      const status = (cells[6] ?? '').trim().toUpperCase();
+      const statusRaw = (cells[6] ?? '').trim();
+      const status = statusRaw.toUpperCase();
       const appt = (cells[0] ?? '').trim();
       if (appt) lastAppt = appt;
 
@@ -253,7 +256,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
 
       const row: Row = {
         dn: (cells[2] ?? '').trim(),
-        status: (cells[6] ?? '').trim(),
+        status: statusRaw,
         carrier: (cells[1] ?? '').trim(),
         loadNo: (cells[3] ?? '').trim(),
         appointmentTime: lastAppt,
@@ -261,6 +264,14 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
         loadId: (cells[7] ?? '').trim(),
         pickupDateTime,
       };
+
+      if (status === 'MISSED APPT' || status === 'MISSED') {
+        // Business rule: the outbound schedule sheet explicitly marks missed
+        // appointments with a "MISSED APPT" status. Count those marker rows.
+        missedOutboundCount++;
+        missedOutboundRows.push(row);
+        continue;
+      }
 
       if (inPreloadSection) {
         if (['PLANNED', 'PICKING', 'LOADED', 'COMMIT FAILED', 'STAGED'].includes(status)) {
@@ -284,9 +295,9 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
       }
     }
 
-    res.json({ outboundLivesCount, preloadsCount, shippedLiveCount, shippedPreloadCount, liveRows, preloadRows, shippedLiveRows, shippedPreloadRows, error: null });
+    res.json({ outboundLivesCount, preloadsCount, shippedLiveCount, shippedPreloadCount, missedOutboundCount, missedOutboundRows, liveRows, preloadRows, shippedLiveRows, shippedPreloadRows, error: null });
   } catch (e: any) {
-    res.json({ outboundLivesCount: null, preloadsCount: null, shippedLiveCount: null, shippedPreloadCount: null, liveRows: [], preloadRows: [], shippedLiveRows: [], shippedPreloadRows: [], error: e.message });
+    res.json({ outboundLivesCount: null, preloadsCount: null, shippedLiveCount: null, shippedPreloadCount: null, missedOutboundCount: null, missedOutboundRows: [], liveRows: [], preloadRows: [], shippedLiveRows: [], shippedPreloadRows: [], error: e.message });
   }
 });
 
@@ -342,6 +353,23 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       }
     }
 
+    // Missed inbound appointments: conservative rule based on the live section.
+    // A scheduled live appointment is "missed" when its appointment time has
+    // passed (before current LA time) and there is no arrival evidence yet:
+    // no arrival time recorded and the status is not an arrived/in-progress
+    // state (IN YARD, IN PROGRESS, TASK COMPLETED, PARTIAL RECEIVED, CLOSED,
+    // FORCE CLOSED). The inbound sheet does not use an explicit MISSED marker.
+    const ARRIVED_STATUSES = new Set(['IN YARD', 'IN PROGRESS', 'IN PROGESS', 'TASK COMPLETED', 'PARTIAL RECEIVED', 'CLOSED', 'FORCE CLOSED', 'COMPLETED']);
+    const nowMinutes = getCurrentLATimeMinutes();
+    const missedInboundRows = livePoRows.filter((row) => {
+      const apptMinutes = parseApptTimeToMinutes(row.appointmentTime);
+      if (apptMinutes === null || apptMinutes > nowMinutes) return false;
+      if (row.arrivalTime) return false;
+      const statusUpper = row.status.toUpperCase();
+      if (ARRIVED_STATUSES.has(statusUpper)) return false;
+      return true;
+    });
+
     // "No RN Arrived Yesterday": fetch the previous LA calendar day's tab from
     // the inbound schedule and count rows whose RN field is NO RN / NO-RN.
     const yesterday = getYesterdayDateLA();
@@ -381,6 +409,8 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       dropCount: dropPoRows.length,
       livePoRows,
       dropPoRows,
+      missedInboundCount: missedInboundRows.length,
+      missedInboundRows,
       yesterdayNoRnCount,
       yesterdayNoRnDate,
       yesterdayNoRnRows,
@@ -388,7 +418,7 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       error: null,
     });
   } catch (e: any) {
-    res.json({ liveCount: null, dropCount: null, livePoRows: [], dropPoRows: [], yesterdayNoRnCount: null, yesterdayNoRnDate: null, yesterdayNoRnRows: [], yesterdayNoRnError: null, error: e.message });
+    res.json({ liveCount: null, dropCount: null, livePoRows: [], dropPoRows: [], missedInboundCount: null, missedInboundRows: [], yesterdayNoRnCount: null, yesterdayNoRnDate: null, yesterdayNoRnRows: [], yesterdayNoRnError: null, error: e.message });
   }
 });
 

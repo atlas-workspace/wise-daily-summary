@@ -153,6 +153,26 @@
     el.hidden = false;
   }
 
+  function renderMissedTable(rows, containerId, title, isOutbound) {
+    var el = document.getElementById(containerId);
+    if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No records</p>'; el.hidden = false; return; }
+    var html = '<div class="detail-header"><span class="detail-header-title">' + escapeHtml(title) + '</span><span class="detail-header-count">' + rows.length + ' total</span></div>';
+    if (isOutbound) {
+      html += '<table><thead><tr><th>DN</th><th>Carrier</th><th>Load #</th><th>Appt</th><th>Status</th><th>Door</th><th>Load ID</th></tr></thead><tbody>';
+      rows.forEach(function (r) {
+        html += '<tr><td>' + escapeHtml(r.dn || '—') + '</td><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.loadNo || '—') + '</td><td>' + escapeHtml(r.appointmentTime || '—') + '</td><td>' + escapeHtml(r.status || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td><td>' + escapeHtml(r.loadId || '—') + '</td></tr>';
+      });
+    } else {
+      html += '<table><thead><tr><th>Carrier</th><th>RN</th><th>PO / Reference</th><th>Appt</th><th>Status</th><th>Door</th><th>Arrival</th></tr></thead><tbody>';
+      rows.forEach(function (r) {
+        html += '<tr><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.po || '—') + '</td><td>' + escapeHtml(r.appointmentTime || '—') + '</td><td>' + escapeHtml(r.status || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td><td>' + escapeHtml(r.arrivalTime || '—') + '</td></tr>';
+      });
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
   function updateTimestamp(date) {
     document.getElementById('last-updated').textContent = 'Updated ' + date.toLocaleTimeString();
   }
@@ -216,6 +236,8 @@
     if (topDetailVisible === 'yard') renderYardDetail(yardData ? yardData.inYardRows : [], 'Loads in Yard', false);
     if (topDetailVisible === 'norn') renderYardDetail(yardData ? yardData.noRnRows : [], 'No RN', false);
     if (topDetailVisible === 'staged') renderYardDetail(yardData ? yardData.inboundStagedRows : [], 'Inbound Staged', true);
+    if (topDetailVisible === 'missedInbound') renderMissedTable(inboundData ? inboundData.missedInboundRows : [], 'missed-inbound-detail', 'Missed Inbound Appointments', false);
+    if (topDetailVisible === 'missedOutbound') renderMissedTable(outboundData ? outboundData.missedOutboundRows : [], 'missed-outbound-detail', 'Missed Outbound Appointments', true);
 
     if (outboundDetailVisible === 'lives') renderDnTable(outboundData ? outboundData.liveRows : [], 'outbound-detail');
     if (outboundDetailVisible === 'preloads') renderDnTable(outboundData ? outboundData.preloadRows : [], 'outbound-detail');
@@ -259,7 +281,7 @@
     updateAutoRefreshStatus();
 
     if (!preserveDetails) {
-      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'outbound-detail', 'inbound-detail'].forEach(function (id) {
+      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'missed-inbound-detail', 'missed-outbound-detail', 'outbound-detail', 'inbound-detail'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.hidden = true;
       });
@@ -292,6 +314,21 @@
       setVal('val-preloads', outboundData.preloadsCount);
       setVal('val-shipped-live', outboundData.shippedLiveCount);
       setVal('val-shipped-preload', outboundData.shippedPreloadCount);
+      if (outboundData.missedOutboundCount != null) {
+        setVal('val-missed-outbound', outboundData.missedOutboundCount);
+        document.getElementById('sub-missed-outbound').textContent = outboundData.missedOutboundCount > 0 ? 'Scheduled but not picked up · click for details' : 'No missed appointments · click for details';
+      } else {
+        setVal('val-missed-outbound', null);
+        document.getElementById('sub-missed-outbound').textContent = 'Outbound schedule unavailable';
+      }
+    } else {
+      outboundData = outboundRes.status === 'fulfilled' ? outboundRes.value : null;
+      setVal('val-outbound-lives', null);
+      setVal('val-preloads', null);
+      setVal('val-shipped-live', null);
+      setVal('val-shipped-preload', null);
+      setVal('val-missed-outbound', null);
+      document.getElementById('sub-missed-outbound').textContent = 'Outbound schedule unavailable';
     }
 
     if (inboundRes.status === 'fulfilled' && !inboundRes.value.error) {
@@ -305,12 +342,21 @@
         setVal('val-yesterday-no-rn', null);
         document.getElementById('sub-yesterday-no-rn').textContent = 'Previous-day data unavailable';
       }
+      if (inboundData.missedInboundCount != null) {
+        setVal('val-missed-inbound', inboundData.missedInboundCount);
+        document.getElementById('sub-missed-inbound').textContent = inboundData.missedInboundCount > 0 ? 'Scheduled but not arrived · click for details' : 'No missed appointments · click for details';
+      } else {
+        setVal('val-missed-inbound', null);
+        document.getElementById('sub-missed-inbound').textContent = 'Inbound schedule unavailable';
+      }
     } else {
       inboundData = inboundRes.status === 'fulfilled' ? inboundRes.value : null;
       setVal('val-inbound-live', null);
       setVal('val-inbound-drop', null);
       setVal('val-yesterday-no-rn', null);
       document.getElementById('sub-yesterday-no-rn').textContent = 'Inbound schedule unavailable';
+      setVal('val-missed-inbound', null);
+      document.getElementById('sub-missed-inbound').textContent = 'Inbound schedule unavailable';
     }
 
     // WMS-backed current-status metrics are fetched on every manual and automatic refresh.
@@ -348,7 +394,7 @@
   var topDetailVisible = null;
 
   function toggleTopDetail(key, renderFn) {
-    var panels = ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail'];
+    var panels = ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'missed-inbound-detail', 'missed-outbound-detail'];
     if (topDetailVisible === key) {
       panels.forEach(function (id) { document.getElementById(id).hidden = true; });
       topDetailVisible = null;
@@ -392,6 +438,18 @@
   document.getElementById('card-yesterday-no-rn').addEventListener('click', function () {
     toggleTopDetail('yesterdayNoRn', function () {
       renderYesterdayNoRnTable(inboundData ? inboundData.yesterdayNoRnRows : [], 'yesterday-no-rn-detail', inboundData ? inboundData.yesterdayNoRnDate : 'the previous day');
+    });
+  });
+
+  document.getElementById('card-missed-inbound').addEventListener('click', function () {
+    toggleTopDetail('missedInbound', function () {
+      renderMissedTable(inboundData ? inboundData.missedInboundRows : [], 'missed-inbound-detail', 'Missed Inbound Appointments', false);
+    });
+  });
+
+  document.getElementById('card-missed-outbound').addEventListener('click', function () {
+    toggleTopDetail('missedOutbound', function () {
+      renderMissedTable(outboundData ? outboundData.missedOutboundRows : [], 'missed-outbound-detail', 'Missed Outbound Appointments', true);
     });
   });
 
