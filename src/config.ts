@@ -29,6 +29,9 @@ export const config = {
     authToken: process.env.WMS_AUTH_TOKEN || '',
     tenantId: process.env.TENANT_ID || 'LT',
     facilityId: process.env.FACILITY_ID || 'LT_F14',
+    serviceRefreshToken: process.env.WMS_SERVICE_REFRESH_TOKEN || '',
+    serviceAuthorization: process.env.WMS_SERVICE_AUTHORIZATION || '',
+    serviceIamBaseUrl: process.env.WMS_IAM_BASE_URL || '',
   },
 
   yms: {

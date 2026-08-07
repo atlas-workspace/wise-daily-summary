@@ -302,7 +302,10 @@
 
   function getMetricsUnavailableMessage(result, sectionName) {
     if (result.status === 'rejected' && result.reason && result.reason.status === 401) {
-      return 'Session expired. Sign out and sign in again.';
+      return sectionName + ' metrics are temporarily unavailable.';
+    }
+    if (result.status === 'fulfilled' && result.value && result.value.error && !result.value.metrics) {
+      return result.value.error;
     }
     return sectionName + ' metrics are temporarily unavailable. Refresh to try again.';
   }
@@ -333,8 +336,8 @@
   }
 
   function setMetricsUnavailableSubtitle(elementId, result, sectionName) {
-    if (result.status === 'rejected' && result.reason && result.reason.status === 401) {
-      document.getElementById(elementId).textContent = 'Session expired · Sign out and sign in again';
+    if (result.status === 'fulfilled' && result.value && result.value.error) {
+      document.getElementById(elementId).textContent = result.value.error;
       return;
     }
     document.getElementById(elementId).textContent = sectionName + ' metrics temporarily unavailable · Refresh to try again';
@@ -557,7 +560,7 @@
     outboundMetricDetailStatus = status;
     try {
       var data = await fetchWmsJson('/api/summary/outbound-orders/' + encodeURIComponent(status));
-      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
+      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(data.error) + '</p>'; return; }
       var totalCount = data.totalCount || 0;
       var orders = data.orders || [];
       var limitNote = totalCount > orders.length ? '<div class="detail-limit-note">Showing first ' + orders.length + ' of ' + totalCount + '</div>' : '';
@@ -565,8 +568,7 @@
       renderOrderTable(orders, 'outbound-metrics-detail', status);
       el.innerHTML = headerHtml + el.innerHTML + limitNote;
     } catch (e) {
-      var message = e && e.status === 401 ? 'Session expired. Sign out and sign in again.' : 'Details unavailable';
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(message) + '</p>';
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
     }
   }
 
@@ -587,7 +589,7 @@
     inboundMetricDetailStatus = status;
     try {
       var data = await fetchWmsJson('/api/summary/inbound-receipts/' + encodeURIComponent(status));
-      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>'; return; }
+      if (data.error) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(data.error) + '</p>'; return; }
       var totalCount = data.totalCount || 0;
       var receipts = data.receipts || [];
       var limitNote = totalCount > receipts.length ? '<div class="detail-limit-note">Showing first ' + receipts.length + ' of ' + totalCount + '</div>' : '';
@@ -595,8 +597,7 @@
       renderReceiptTable(receipts, 'inbound-metrics-detail', status);
       el.innerHTML = headerHtml + el.innerHTML + limitNote;
     } catch (e) {
-      var message = e && e.status === 401 ? 'Session expired. Sign out and sign in again.' : 'Details unavailable';
-      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">' + escapeHtml(message) + '</p>';
+      el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Details unavailable</p>';
     }
   }
 
@@ -627,21 +628,17 @@
     startAutoRefresh();
   });
 
-  // Check session on load
+  // Dashboard loads directly without requiring sign-in.
+  // WMS-backed sections use server-side service auth when configured;
+  // otherwise they show a business-friendly unavailable state.
   async function checkSession() {
+    showScreen('dashboard');
+    var session = null;
     try {
       var res = await fetch('/api/auth/me');
-      if (res.ok) {
-        var data = await res.json();
-        showScreen('dashboard');
-        initDashboard(data);
-        return;
-      }
+      if (res.ok) session = await res.json();
     } catch (e) {}
-    dashboardActive = false;
-    clearAutoRefresh();
-    updateAutoRefreshStatus();
-    showScreen('login');
+    initDashboard(session || { username: 'Operator' });
   }
 
   // Login

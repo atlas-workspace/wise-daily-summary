@@ -17,7 +17,12 @@ export function createHealthRoute(options: HealthRouteOptions) {
   const isHealthy = options.isHealthy ?? ((res) => res.ok);
 
   return async (req: Request, res: Response): Promise<void> => {
-    const auth = req.authContext!;
+    const auth = req.wmsAuth;
+
+    if (!auth) {
+      res.status(200).json({ ok: false, message: `${serviceName} access is not configured. Contact your administrator.` });
+      return;
+    }
 
     try {
       const upstreamRes = await fetch(buildUrl(), {

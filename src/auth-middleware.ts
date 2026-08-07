@@ -4,12 +4,14 @@ import { refreshAccessToken } from './iam-adapter';
 import { logger } from './logger';
 import { verifySessionId, getSession, setSession, deleteSession } from './session-store';
 import { parseCookies } from './cookies';
+import { resolveWmsAuthContext } from './service-auth';
 import type { AuthContext, SessionData } from './types';
 
 declare global {
   namespace Express {
     interface Request {
       authContext?: AuthContext;
+      wmsAuth?: AuthContext;
     }
   }
 }
@@ -75,5 +77,16 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).setHeader('Cache-Control', 'no-store').json({ error: 'Session expired or not authenticated. Please sign in again.' });
     return;
   }
+  next();
+}
+
+/**
+ * Resolve WMS authentication for summary endpoints: prefers the signed-in
+ * browser session, falls back to the server-side service account. Attaches
+ * the resolved context to req.wmsAuth (may be undefined when neither is
+ * available — callers respond with a business-friendly unavailable state).
+ */
+export async function resolveWmsAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  req.wmsAuth = (await resolveWmsAuthContext(req.authContext)) ?? undefined;
   next();
 }

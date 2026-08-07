@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createServer } from 'http';
 import { config } from './config';
 import { logger } from './logger';
-import { sessionMiddleware, requireAuth } from './auth-middleware';
+import { sessionMiddleware, resolveWmsAuth } from './auth-middleware';
 import { authRouter } from './auth-routes';
 import { buildHealthRoutes } from './health-route';
 import { summaryRouter } from './daily-summary-routes';
@@ -20,7 +20,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/summary', summaryRouter);
 
 for (const { path: routePath, handler } of buildHealthRoutes()) {
-  app.get(routePath, requireAuth, handler);
+  app.get(routePath, resolveWmsAuth, handler);
 }
 
 app.get('/health', (_req, res) => {
