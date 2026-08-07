@@ -296,6 +296,13 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     const missedOutboundRows: Row[] = [];
     let missedOutboundError: string | null = null;
 
+    // Statuses that prove an outbound load was handled (not missed), even when
+    // the appointment column is blank on the sheet.
+    const OUTBOUND_HANDLED_STATUSES = new Set([
+      'SHIPPED', 'LOADED', 'STAGED', 'PICKING', 'PICKED', 'PLANNED',
+      'COMMIT FAILED', 'RESCHEDULED', 'CANCELLED', 'ON HOLD',
+    ]);
+
     try {
       const yesterdayText = await fetchSheet(`https://docs.google.com/spreadsheets/d/${OUTBOUND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${yesterdayOutboundTab}`);
       const yLines = yesterdayText.split('\n');
@@ -306,18 +313,37 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
         const yStatus = yStatusRaw.toUpperCase();
         const yAppt = (cells[0] ?? '').trim();
         if (yAppt) yLastAppt = yAppt;
-        if (yStatus !== 'MISSED APPT' && yStatus !== 'MISSED') continue;
-        missedOutboundCount++;
-        missedOutboundRows.push({
-          dn: (cells[2] ?? '').trim(),
-          status: yStatusRaw,
-          carrier: (cells[1] ?? '').trim(),
-          loadNo: (cells[3] ?? '').trim(),
-          appointmentTime: yLastAppt,
-          door: (cells[5] ?? '').trim(),
-          loadId: (cells[7] ?? '').trim(),
-          pickupDateTime: (cells[18] ?? '').trim(),
-        });
+
+        const yDn = (cells[2] ?? '').trim();
+        const yCarrier = (cells[1] ?? '').trim();
+        const yLoadId = (cells[7] ?? '').trim();
+
+        // Skip header rows, spacers, and section markers (PRELOADS BELOW etc.)
+        if (yCarrier.toUpperCase() === 'CARRIER' || yDn.toUpperCase() === 'DN#' || yDn.toUpperCase() === 'DN') continue;
+        if (yCarrier.toUpperCase().includes('PRELOADS BELOW') || yCarrier.toUpperCase().includes('OUTBOUND SCHEDULE')) continue;
+        if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(yCarrier) || /^[A-Z]/.test(yCarrier) && !yDn && !yLoadId && !yStatus) continue;
+
+        // Valid data row: has DN / carrier / load ID / status evidence
+        const isValidRow = Boolean(yDn || yCarrier || yLoadId || yStatus);
+        if (!isValidRow) continue;
+
+        const explicitlyMissed = yStatus === 'MISSED APPT' || yStatus === 'MISSED' || yStatus.includes('NO SHOW');
+        const blankAppointment = !yLastAppt.trim();
+        const notHandled = !OUTBOUND_HANDLED_STATUSES.has(yStatus);
+
+        if (explicitlyMissed || (blankAppointment && notHandled)) {
+          missedOutboundCount++;
+          missedOutboundRows.push({
+            dn: yDn,
+            status: yStatusRaw,
+            carrier: yCarrier,
+            loadNo: (cells[3] ?? '').trim(),
+            appointmentTime: yLastAppt,
+            door: (cells[5] ?? '').trim(),
+            loadId: yLoadId,
+            pickupDateTime: (cells[18] ?? '').trim(),
+          });
+        }
       }
     } catch (e: any) {
       missedOutboundError = e.message || 'Outbound schedule unavailable';
@@ -446,12 +472,17 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
           });
         }
 
-        // Missed rule (live section only): appointment on yesterday's tab with
-        // no arrival evidence — no arrival time and status not arrived/in-progress.
+        // Missed rule (live section only). Per user: if the appointment column
+        // is blank/empty/missing, that row is a missed appointment — in addition
+        // to the existing no-arrival-evidence rule. On yesterday's tab every
+        // appointment time has passed, so a row is missed when it has no
+        // appointment time (inherited empty) OR no arrival evidence (no arrival
+        // time and status not arrived/in-progress/completed).
         if (!yInDropSection) {
-          if (yArrivalTime) continue;
           const statusUpper = yStatus.toUpperCase();
-          if (ARRIVED_STATUSES.has(statusUpper)) continue;
+          const hasNoAppointment = !yLastAppointmentTime.trim();
+          const hasArrivalEvidence = Boolean(yArrivalTime) || ARRIVED_STATUSES.has(statusUpper);
+          if (!hasNoAppointment && hasArrivalEvidence) continue;
           missedInboundCount++;
           missedInboundRows.push({
             po: yReference,
