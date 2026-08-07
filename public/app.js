@@ -367,20 +367,11 @@
       setVal('val-no-rn', yardData.noRnCount);
       setVal('val-staged', yardData.inboundStagedCount);
       setYardAvailability(true);
-      if (yardData.yesterdayNoRnCount != null) {
-        setVal('val-yesterday-no-rn', yardData.yesterdayNoRnCount);
-        document.getElementById('sub-yesterday-no-rn').textContent = 'Arrived ' + (yardData.yesterdayNoRnDate || 'the previous day') + ' · click for details';
-      } else {
-        setVal('val-yesterday-no-rn', null);
-        document.getElementById('sub-yesterday-no-rn').textContent = 'Arrival data unavailable';
-      }
     } else {
       yardData = yardRes.status === 'fulfilled' ? yardRes.value : { error: 'Yard tracker unavailable' };
       setVal('val-in-yard', null);
       setVal('val-no-rn', null);
       setVal('val-staged', null);
-      setVal('val-yesterday-no-rn', null);
-      document.getElementById('sub-yesterday-no-rn').textContent = 'Yard tracker unavailable';
       setYardAvailability(false);
     }
 
@@ -396,6 +387,19 @@
       inboundData = inboundRes.value;
       setVal('val-inbound-live', inboundData.liveCount);
       setVal('val-inbound-drop', inboundData.dropCount);
+      if (inboundData.yesterdayNoRnCount != null && !inboundData.yesterdayNoRnError) {
+        setVal('val-yesterday-no-rn', inboundData.yesterdayNoRnCount);
+        document.getElementById('sub-yesterday-no-rn').textContent = 'Arrived ' + (inboundData.yesterdayNoRnDate || 'the previous day') + ' · click for details';
+      } else {
+        setVal('val-yesterday-no-rn', null);
+        document.getElementById('sub-yesterday-no-rn').textContent = 'Previous-day data unavailable';
+      }
+    } else {
+      inboundData = inboundRes.status === 'fulfilled' ? inboundRes.value : null;
+      setVal('val-inbound-live', null);
+      setVal('val-inbound-drop', null);
+      setVal('val-yesterday-no-rn', null);
+      document.getElementById('sub-yesterday-no-rn').textContent = 'Inbound schedule unavailable';
     }
 
     // Auth-required WMS metrics are fetched on every manual and automatic refresh.
@@ -494,7 +498,7 @@
 
   document.getElementById('card-yesterday-no-rn').addEventListener('click', function () {
     toggleTopDetail('yesterdayNoRn', function () {
-      renderYesterdayNoRnTable(yardData ? yardData.yesterdayNoRnRows : [], 'yesterday-no-rn-detail', yardData ? yardData.yesterdayNoRnDate : 'the previous day');
+      renderYesterdayNoRnTable(inboundData ? inboundData.yesterdayNoRnRows : [], 'yesterday-no-rn-detail', inboundData ? inboundData.yesterdayNoRnDate : 'the previous day');
     });
   });
 

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from './auth-middleware';
 import { config } from './config';
-import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, normalizeSheetDate } from './date-utils';
+import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, getSheetTabNameForDate, normalizeSheetDate } from './date-utils';
 import type { AuthContext } from './types';
 
 function parseCSVLine(line: string): string[] {
@@ -157,11 +157,6 @@ router.get('/yard', async (_req: Request, res: Response) => {
     const inYardRows: YardRow[] = [];
     const noRnRows: YardRow[] = [];
 
-    // Previous LA calendar day for the "No RN arrived yesterday" metric
-    const yesterday = getYesterdayDateLA();
-    const yesterdayKey = yesterday.iso;
-    const yesterdayNoRnRows: YesterdayNoRnRow[] = [];
-
     // Right table: col 12 = carrier, col 13 = RN, col 14 = trailer, col 15 = reference, col 16 = date
     for (let i = 2; i < lines.length; i++) {
       const cells = parseCSVLine(lines[i]);
@@ -175,9 +170,6 @@ router.get('/yard', async (_req: Request, res: Response) => {
       if (isNoRn(rn)) {
         noRnCount++;
         noRnRows.push(row);
-        if (normalizeSheetDate(date) === yesterdayKey) {
-          yesterdayNoRnRows.push({ carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date, door: '', notes: '', source: 'yard' });
-        }
       }
     }
 
@@ -187,9 +179,6 @@ router.get('/yard', async (_req: Request, res: Response) => {
       if (isNoRn(row.rn)) {
         noRnCount++;
         noRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date });
-        if (normalizeSheetDate(row.date) === yesterdayKey) {
-          yesterdayNoRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date, door: row.door, notes: row.notes, source: 'staged' });
-        }
       }
     }
 
@@ -202,9 +191,6 @@ router.get('/yard', async (_req: Request, res: Response) => {
       noRnRows,
       inboundStagedRows,
       stagedRows: inboundStagedRows,
-      yesterdayNoRnCount: yesterdayNoRnRows.length,
-      yesterdayNoRnDate: yesterday.mdy,
-      yesterdayNoRnRows,
       error: null,
     });
   } catch (e: any) {
@@ -217,9 +203,6 @@ router.get('/yard', async (_req: Request, res: Response) => {
       noRnRows: [],
       inboundStagedRows: [],
       stagedRows: [],
-      yesterdayNoRnCount: null,
-      yesterdayNoRnDate: null,
-      yesterdayNoRnRows: [],
       error: e.message,
     });
   }
@@ -348,9 +331,53 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       }
     }
 
-    res.json({ liveCount: livePoRows.length, dropCount: dropPoRows.length, livePoRows, dropPoRows, error: null });
+    // "No RN Arrived Yesterday": fetch the previous LA calendar day's tab from
+    // the inbound schedule and count rows whose RN field is NO RN / NO-RN.
+    const yesterday = getYesterdayDateLA();
+    const yesterdayTab = encodeURIComponent(getSheetTabNameForDate(yesterday.date));
+    let yesterdayNoRnCount = 0;
+    let yesterdayNoRnDate = yesterday.mdy;
+    const yesterdayNoRnRows: YesterdayNoRnRow[] = [];
+    let yesterdayNoRnError: string | null = null;
+
+    try {
+      const yesterdayText = await fetchSheet(`https://docs.google.com/spreadsheets/d/${INBOUND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${yesterdayTab}`);
+      const yLines = yesterdayText.split('\n');
+      for (let i = 0; i < yLines.length; i++) {
+        const cells = parseCSVLine(yLines[i]);
+        const carrier = (cells[1] ?? '').trim();
+        if (!carrier || carrier.toUpperCase() === 'CARRIER') continue;
+        const rn = (cells[2] ?? '').trim();
+        if (!isNoRn(rn)) continue;
+        yesterdayNoRnCount++;
+        yesterdayNoRnRows.push({
+          carrier,
+          rn,
+          trailer: (cells[11] ?? '').trim(),
+          reference: (cells[5] ?? '').trim(),
+          date: (cells[12] ?? '').trim() || yesterday.mdy,
+          door: (cells[4] ?? '').trim(),
+          notes: (cells[7] ?? '').trim(),
+          source: 'inbound',
+        });
+      }
+    } catch (e: any) {
+      yesterdayNoRnError = e.message || 'Inbound schedule unavailable';
+    }
+
+    res.json({
+      liveCount: livePoRows.length,
+      dropCount: dropPoRows.length,
+      livePoRows,
+      dropPoRows,
+      yesterdayNoRnCount,
+      yesterdayNoRnDate,
+      yesterdayNoRnRows,
+      yesterdayNoRnError,
+      error: null,
+    });
   } catch (e: any) {
-    res.json({ liveCount: null, dropCount: null, livePoRows: [], dropPoRows: [], error: e.message });
+    res.json({ liveCount: null, dropCount: null, livePoRows: [], dropPoRows: [], yesterdayNoRnCount: null, yesterdayNoRnDate: null, yesterdayNoRnRows: [], yesterdayNoRnError: null, error: e.message });
   }
 });
 

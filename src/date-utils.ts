@@ -80,7 +80,7 @@ export function getTodayRangeLA(): { from: string; to: string; display: string }
   return { from: range.from, to: range.to, display: range.fromDisplay };
 }
 
-export function getYesterdayDateLA(): { iso: string; display: string; mdy: string } {
+export function getYesterdayDateLA(): { date: Date; iso: string; display: string; mdy: string } {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: TZ,
@@ -101,10 +101,23 @@ export function getYesterdayDateLA(): { iso: string; display: string; mdy: strin
   const d = String(anchor.getUTCDate()).padStart(2, "0");
 
   return {
+    date: anchor,
     iso: `${y}-${m}-${d}`,
     display: `${m}/${d}/${y}`,
     mdy: `${m}/${d}/${y}`,
   };
+}
+
+export function getSheetTabNameForDate(date: Date): string {
+  const dayFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "long" });
+  const monthFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "long" });
+  const dayNumFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, day: "numeric" });
+
+  const weekday = dayFormatter.format(date).toUpperCase();
+  const month = monthFormatter.format(date).toUpperCase();
+  const dayNum = dayNumFormatter.format(date).padStart(2, "0");
+
+  return `${weekday} - ${month} ${dayNum}`;
 }
 
 /**
