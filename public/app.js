@@ -140,6 +140,19 @@
     el.hidden = false;
   }
 
+  function renderYesterdayNoRnTable(rows, containerId, dateLabel) {
+    var el = document.getElementById(containerId);
+    if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No No-RN arrivals for ' + escapeHtml(dateLabel || 'the previous day') + '</p>'; el.hidden = false; return; }
+    var html = '<div class="detail-header"><span class="detail-header-title">No RN Arrived ' + escapeHtml(dateLabel || '') + '</span><span class="detail-header-count">' + rows.length + ' total</span></div>';
+    html += '<table><thead><tr><th>Carrier</th><th>RN</th><th>Trailer</th><th>Reference</th><th>Arrival Date</th><th>Door</th><th>Notes</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.trailer || '—') + '</td><td>' + escapeHtml(r.reference || '—') + '</td><td>' + escapeHtml(r.date || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td><td>' + escapeHtml(r.notes || '—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+    el.hidden = false;
+  }
+
   function renderMetricsGrid(containerId, metrics, clickHandler) {
     var el = document.getElementById(containerId);
     if (!metrics || metrics.length === 0) {
@@ -335,7 +348,7 @@
     updateAutoRefreshStatus();
 
     if (!preserveDetails) {
-      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'outbound-detail', 'inbound-detail', 'outbound-metrics-detail', 'inbound-metrics-detail'].forEach(function (id) {
+      ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail', 'outbound-detail', 'inbound-detail', 'outbound-metrics-detail', 'inbound-metrics-detail'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.hidden = true;
       });
@@ -354,11 +367,20 @@
       setVal('val-no-rn', yardData.noRnCount);
       setVal('val-staged', yardData.inboundStagedCount);
       setYardAvailability(true);
+      if (yardData.yesterdayNoRnCount != null) {
+        setVal('val-yesterday-no-rn', yardData.yesterdayNoRnCount);
+        document.getElementById('sub-yesterday-no-rn').textContent = 'Arrived ' + (yardData.yesterdayNoRnDate || 'the previous day') + ' · click for details';
+      } else {
+        setVal('val-yesterday-no-rn', null);
+        document.getElementById('sub-yesterday-no-rn').textContent = 'Arrival data unavailable';
+      }
     } else {
       yardData = yardRes.status === 'fulfilled' ? yardRes.value : { error: 'Yard tracker unavailable' };
       setVal('val-in-yard', null);
       setVal('val-no-rn', null);
       setVal('val-staged', null);
+      setVal('val-yesterday-no-rn', null);
+      document.getElementById('sub-yesterday-no-rn').textContent = 'Yard tracker unavailable';
       setYardAvailability(false);
     }
 
@@ -429,7 +451,7 @@
   var topDetailVisible = null;
 
   function toggleTopDetail(key, renderFn) {
-    var panels = ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail'];
+    var panels = ['partial-shipped-detail', 'commit-failed-detail', 'yard-detail', 'yesterday-no-rn-detail'];
     if (topDetailVisible === key) {
       panels.forEach(function (id) { document.getElementById(id).hidden = true; });
       topDetailVisible = null;
@@ -467,6 +489,12 @@
   document.getElementById('card-staged').addEventListener('click', function () {
     toggleTopDetail('staged', function () {
       renderYardDetail(yardData ? yardData.inboundStagedRows : [], 'Inbound Staged', true);
+    });
+  });
+
+  document.getElementById('card-yesterday-no-rn').addEventListener('click', function () {
+    toggleTopDetail('yesterdayNoRn', function () {
+      renderYesterdayNoRnTable(yardData ? yardData.yesterdayNoRnRows : [], 'yesterday-no-rn-detail', yardData ? yardData.yesterdayNoRnDate : 'the previous day');
     });
   });
 

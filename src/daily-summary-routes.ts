@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from './auth-middleware';
 import { config } from './config';
-import { getTodaySheetTabName, getRollingAppointmentRangeLA } from './date-utils';
+import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, normalizeSheetDate } from './date-utils';
 import type { AuthContext } from './types';
 
 function parseCSVLine(line: string): string[] {
@@ -22,6 +22,12 @@ function parseCSVLine(line: string): string[] {
 
 interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; }
 interface InboundStagedRow { carrier: string; rn: string; reference: string; door: string; date: string; notes: string; status: 'STAGED'; }
+interface YesterdayNoRnRow { carrier: string; rn: string; trailer: string; reference: string; date: string; door: string; notes: string; source: string; }
+
+function isNoRn(rn: string): boolean {
+  const upper = rn.toUpperCase().replace(/-/g, ' ');
+  return upper === 'NO RN' || upper.includes('NO RN');
+}
 
 function parseInboundStagedRows(lines: string[]): InboundStagedRow[] {
   const leftHeaderIdx = lines.findIndex((line) => {
@@ -151,26 +157,39 @@ router.get('/yard', async (_req: Request, res: Response) => {
     const inYardRows: YardRow[] = [];
     const noRnRows: YardRow[] = [];
 
+    // Previous LA calendar day for the "No RN arrived yesterday" metric
+    const yesterday = getYesterdayDateLA();
+    const yesterdayKey = yesterday.iso;
+    const yesterdayNoRnRows: YesterdayNoRnRow[] = [];
+
     // Right table: col 12 = carrier, col 13 = RN, col 14 = trailer, col 15 = reference, col 16 = date
     for (let i = 2; i < lines.length; i++) {
       const cells = parseCSVLine(lines[i]);
       const carrier = (cells[12] ?? '').trim();
       if (!carrier) continue;
       const rn = (cells[13] ?? '').trim();
-      const row: YardRow = { carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date: (cells[16] ?? '').trim() };
+      const date = (cells[16] ?? '').trim();
+      const row: YardRow = { carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date };
       inYardCount++;
       inYardRows.push(row);
-      const rnUpper = rn.toUpperCase().replace(/-/g, ' ');
-      if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) { noRnCount++; noRnRows.push(row); }
+      if (isNoRn(rn)) {
+        noRnCount++;
+        noRnRows.push(row);
+        if (normalizeSheetDate(date) === yesterdayKey) {
+          yesterdayNoRnRows.push({ carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date, door: '', notes: '', source: 'yard' });
+        }
+      }
     }
 
     // Left table: only the first contiguous inbound staged/No-RN worklist after its header.
     const inboundStagedRows = parseInboundStagedRows(lines);
     for (const row of inboundStagedRows) {
-      const rnUpper = row.rn.toUpperCase().replace(/-/g, ' ');
-      if (rnUpper === 'NO RN' || rnUpper.includes('NO RN')) {
+      if (isNoRn(row.rn)) {
         noRnCount++;
         noRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date });
+        if (normalizeSheetDate(row.date) === yesterdayKey) {
+          yesterdayNoRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date, door: row.door, notes: row.notes, source: 'staged' });
+        }
       }
     }
 
@@ -183,6 +202,9 @@ router.get('/yard', async (_req: Request, res: Response) => {
       noRnRows,
       inboundStagedRows,
       stagedRows: inboundStagedRows,
+      yesterdayNoRnCount: yesterdayNoRnRows.length,
+      yesterdayNoRnDate: yesterday.mdy,
+      yesterdayNoRnRows,
       error: null,
     });
   } catch (e: any) {
@@ -195,6 +217,9 @@ router.get('/yard', async (_req: Request, res: Response) => {
       noRnRows: [],
       inboundStagedRows: [],
       stagedRows: [],
+      yesterdayNoRnCount: null,
+      yesterdayNoRnDate: null,
+      yesterdayNoRnRows: [],
       error: e.message,
     });
   }

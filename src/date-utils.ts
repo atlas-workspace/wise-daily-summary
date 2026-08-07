@@ -79,3 +79,47 @@ export function getTodayRangeLA(): { from: string; to: string; display: string }
   const range = getRollingAppointmentRangeLA(0, 0);
   return { from: range.from, to: range.to, display: range.fromDisplay };
 }
+
+export function getYesterdayDateLA(): { iso: string; display: string; mdy: string } {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(now);
+  const year = Number(parts.find((p) => p.type === "year")!.value);
+  const month = Number(parts.find((p) => p.type === "month")!.value);
+  const day = Number(parts.find((p) => p.type === "day")!.value);
+
+  // Previous calendar day in LA: shift by one UTC day from the LA noon anchor
+  const anchor = new Date(Date.UTC(year, month - 1, day, 12));
+  anchor.setUTCDate(anchor.getUTCDate() - 1);
+  const y = String(anchor.getUTCFullYear()).padStart(4, "0");
+  const m = String(anchor.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(anchor.getUTCDate()).padStart(2, "0");
+
+  return {
+    iso: `${y}-${m}-${d}`,
+    display: `${m}/${d}/${y}`,
+    mdy: `${m}/${d}/${y}`,
+  };
+}
+
+/**
+ * Normalize a yard-sheet date string (M/D/YYYY, M/D/YY, M.D.YY, M.D.YYYY) to
+ * a comparable "YYYY-MM-DD" key, or null when not parseable.
+ */
+export function normalizeSheetDate(value: string): string | null {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const m = raw.match(/^(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{2,4})$/);
+  if (!m) return null;
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
