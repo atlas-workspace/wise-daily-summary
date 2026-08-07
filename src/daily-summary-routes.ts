@@ -393,15 +393,24 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       const status = cells[6]?.trim() ?? '';
       const arrivalTime = cells[8]?.trim() ?? '';
 
-      // Valid appointment row needs a carrier AND a 76-prefix reference
-      if (!carrier || !reference.startsWith('76')) continue;
-
-      const row: PoRow = { po: reference, appointmentTime: lastAppointmentTime, carrier, rn, et, door, status, arrivalTime };
-
       if (inDropSection) {
+        // Drop Scheduled rule: only count drop rows that are NOT filled out —
+        // no status information AND no meaningful load data assigned yet
+        // (RN / PO / arrival blank). Filled/tracked drop rows (status present,
+        // RN present, arrival recorded) are excluded from the count.
+        // Exclude headers, spacers, and rows with no carrier/reference evidence.
+        const hasRowEvidence = Boolean(carrier || reference);
+        if (!hasRowEvidence) continue;
+        const isUnfilled = !status && !rn && !arrivalTime && !et && !door;
+        if (!isUnfilled) continue;
+
+        const row: PoRow = { po: reference, appointmentTime: lastAppointmentTime, carrier, rn, et, door, status, arrivalTime };
         dropCount++;
         dropPoRows.push(row);
       } else {
+        // Valid live appointment row needs a carrier AND a 76-prefix reference
+        if (!carrier || !reference.startsWith('76')) continue;
+        const row: PoRow = { po: reference, appointmentTime: lastAppointmentTime, carrier, rn, et, door, status, arrivalTime };
         liveCount++;
         livePoRows.push(row);
       }
