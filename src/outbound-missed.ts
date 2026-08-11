@@ -42,8 +42,36 @@ function normalizeStatus(status: string): string {
   return status.trim().toUpperCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
 }
 
+function isHeaderOrSectionRow(row: OutboundScheduleRow): boolean {
+  const carrierUpper = row.carrier.toUpperCase();
+  const dnUpper = row.dn.toUpperCase();
+  if (carrierUpper === 'CARRIER' || dnUpper === 'DN#' || dnUpper === 'DN') return true;
+  if (carrierUpper.includes('PRELOADS BELOW') || carrierUpper.includes('OUTBOUND SCHEDULE')) return true;
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(row.carrier)) return true;
+  return false;
+}
+
+function hasOperationalData(row: OutboundScheduleRow): boolean {
+  return Boolean(row.dn || row.carrier || row.loadId || row.loadNo || row.status);
+}
+
+function isMarkerOnlyRow(row: OutboundScheduleRow): boolean {
+  return !row.dn && !row.carrier && !row.loadNo && !row.door && !row.loadId;
+}
+
+function isMissedMarker(row: OutboundScheduleRow): boolean {
+  return /\bMISSED(?:\s+APPT)?\b|\bNO\s*SHOW\b/i.test(row.status);
+}
+
+function withMissedStatus(row: OutboundScheduleRow, markerStatus: string): OutboundScheduleRow {
+  return {
+    ...row,
+    status: markerStatus || row.status || 'MISSED APPT',
+  };
+}
+
 export function parseMissedOutboundRows(lines: string[]): OutboundScheduleRow[] {
-  const missedRows: OutboundScheduleRow[] = [];
+  const rows: OutboundScheduleRow[] = [];
   let lastAppointmentTime = '';
 
   for (const line of lines) {
@@ -51,38 +79,57 @@ export function parseMissedOutboundRows(lines: string[]): OutboundScheduleRow[] 
     const appointmentTime = (cells[0] ?? '').trim();
     if (appointmentTime) lastAppointmentTime = appointmentTime;
 
-    const carrier = (cells[1] ?? '').trim();
-    const dn = (cells[2] ?? '').trim();
-    const loadNo = (cells[3] ?? '').trim();
-    const door = (cells[5] ?? '').trim();
     const statusRaw = (cells[6] ?? '').trim();
-    const status = normalizeStatus(statusRaw);
-    const loadId = (cells[7] ?? '').trim();
     const notes = (cells[10] ?? '').trim();
-    const carrierUpper = carrier.toUpperCase();
-    const dnUpper = dn.toUpperCase();
-
-    if (carrierUpper === 'CARRIER' || dnUpper === 'DN#' || dnUpper === 'DN') continue;
-    if (carrierUpper.includes('PRELOADS BELOW') || carrierUpper.includes('OUTBOUND SCHEDULE')) continue;
-    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(carrier)) continue;
-
-    const explicitlyMissed = /\bMISSED(?:\s+APPT)?\b|\bNO\s*SHOW\b/i.test(`${statusRaw} ${notes}`);
-    const isValidDataRow = Boolean(dn || carrier || loadId || statusRaw);
-    const blankAppointment = !appointmentTime;
-    const notHandled = !OUTBOUND_HANDLED_STATUSES.has(status);
-
-    if (!explicitlyMissed && !(isValidDataRow && blankAppointment && notHandled)) continue;
-
-    missedRows.push({
-      dn,
-      status: statusRaw || notes || 'MISSED APPT',
-      carrier,
-      loadNo,
+    rows.push({
+      dn: (cells[2] ?? '').trim(),
+      status: statusRaw || notes,
+      carrier: (cells[1] ?? '').trim(),
+      loadNo: (cells[3] ?? '').trim(),
       appointmentTime: lastAppointmentTime,
-      door,
-      loadId,
+      door: (cells[5] ?? '').trim(),
+      loadId: (cells[7] ?? '').trim(),
       pickupDateTime: (cells[18] ?? '').trim(),
     });
+  }
+
+  const missedRows: OutboundScheduleRow[] = [];
+  const seen = new Set<string>();
+  const addRow = (row: OutboundScheduleRow, markerStatus?: string) => {
+    if (isHeaderOrSectionRow(row) || !hasOperationalData(row)) return;
+    const output = withMissedStatus(row, markerStatus || row.status);
+    const key = `${output.dn}|${output.loadNo}|${output.loadId}|${output.appointmentTime}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    missedRows.push(output);
+  };
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (isHeaderOrSectionRow(row)) continue;
+
+    const status = normalizeStatus(row.status);
+    const explicitlyMissed = isMissedMarker(row);
+    const blankAppointment = !row.appointmentTime;
+    const notHandled = !OUTBOUND_HANDLED_STATUSES.has(status);
+
+    if (explicitlyMissed && isMarkerOnlyRow(row)) {
+      // Some schedules record the missed appointment note on a blank marker row,
+      // with the actual DN/carrier/load data on the adjacent row for that appt.
+      const next = rows.slice(i + 1).find((candidate) =>
+        candidate.appointmentTime === row.appointmentTime && !isMarkerOnlyRow(candidate) && hasOperationalData(candidate) && !isHeaderOrSectionRow(candidate)
+      );
+      const previous = [...rows.slice(0, i)].reverse().find((candidate) =>
+        candidate.appointmentTime === row.appointmentTime && !isMarkerOnlyRow(candidate) && hasOperationalData(candidate) && !isHeaderOrSectionRow(candidate)
+      );
+      const related = next || previous;
+      if (related) addRow(related, row.status);
+      continue;
+    }
+
+    if (explicitlyMissed || (hasOperationalData(row) && blankAppointment && notHandled)) {
+      addRow(row);
+    }
   }
 
   return missedRows;
