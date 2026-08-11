@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { resolveWmsAuth } from './auth-middleware';
 import { config } from './config';
-import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, getSheetTabNameForDate, normalizeSheetDate } from './date-utils';
+import { getTodaySheetTabName, getRollingAppointmentRangeLA, getYesterdayDateLA, getSheetTabNameForDate, getSheetTabNameCandidatesForDate, normalizeSheetDate } from './date-utils';
 import { forceRenewServiceToken } from './service-auth';
 import type { AuthContext } from './types';
+import { parseMissedOutboundRows, type OutboundScheduleRow } from './outbound-missed';
 
 function parseCSVLine(line: string): string[] {
   const cells: string[] = [];
@@ -106,6 +107,18 @@ async function fetchSheet(url: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`);
   return res.text();
+}
+
+async function fetchDatedSheet(sheetId: string, date: Date, expectedIso: string): Promise<string> {
+  for (const tabName of getSheetTabNameCandidatesForDate(date)) {
+    const tab = encodeURIComponent(tabName);
+    const text = await fetchSheet(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${tab}`);
+    const hasExpectedDate = text.split('\n').slice(0, 6).some((line) =>
+      parseCSVLine(line).some((cell) => normalizeSheetDate(cell) === expectedIso)
+    );
+    if (hasExpectedDate) return text;
+  }
+  throw new Error('Previous-day outbound schedule is unavailable.');
 }
 
 class WmsSessionError extends Error {}
@@ -234,12 +247,11 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
     let inPreloadSection = false;
     let lastAppt = '';
 
-    interface Row { dn: string; status: string; carrier: string; loadNo: string; appointmentTime: string; door: string; loadId: string; pickupDateTime: string; }
-    const liveRows: Row[] = [];
-    const preloadRows: Row[] = [];
-    const shippedLiveRows: Row[] = [];
-    const shippedPreloadRows: Row[] = [];
-    const loadedRows: Row[] = [];
+    const liveRows: OutboundScheduleRow[] = [];
+    const preloadRows: OutboundScheduleRow[] = [];
+    const shippedLiveRows: OutboundScheduleRow[] = [];
+    const shippedPreloadRows: OutboundScheduleRow[] = [];
+    const loadedRows: OutboundScheduleRow[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -254,7 +266,7 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
 
       const pickupDateTime = (cells[18] ?? '').trim();
 
-      const row: Row = {
+      const row: OutboundScheduleRow = {
         dn: (cells[2] ?? '').trim(),
         status: statusRaw,
         carrier: (cells[1] ?? '').trim(),
@@ -294,66 +306,16 @@ router.get('/outbound-schedule', async (_req: Request, res: Response) => {
       }
     }
 
-    // Missed outbound appointments come from the PREVIOUS LA calendar day's tab.
-    // Business rule: the outbound schedule sheet explicitly marks missed pickups
-    // with a "MISSED APPT" status (notes often say "MISSED P/U"). Count those
-    // marker rows on yesterday's tab. Rolls daily with America/Los_Angeles.
     const yesterday = getYesterdayDateLA();
-    const yesterdayOutboundTab = encodeURIComponent(getSheetTabNameForDate(yesterday.date));
     let missedOutboundCount = 0;
     let missedOutboundDate = yesterday.mdy;
-    const missedOutboundRows: Row[] = [];
+    let missedOutboundRows: OutboundScheduleRow[] = [];
     let missedOutboundError: string | null = null;
 
-    // Statuses that prove an outbound load was handled (not missed), even when
-    // the appointment column is blank on the sheet.
-    const OUTBOUND_HANDLED_STATUSES = new Set([
-      'SHIPPED', 'LOADED', 'STAGED', 'PICKING', 'PICKED', 'PLANNED',
-      'COMMIT FAILED', 'RESCHEDULED', 'CANCELLED', 'ON HOLD',
-    ]);
-
     try {
-      const yesterdayText = await fetchSheet(`https://docs.google.com/spreadsheets/d/${OUTBOUND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${yesterdayOutboundTab}`);
-      const yLines = yesterdayText.split('\n');
-      let yLastAppt = '';
-      for (let i = 0; i < yLines.length; i++) {
-        const cells = parseCSVLine(yLines[i]);
-        const yStatusRaw = (cells[6] ?? '').trim();
-        const yStatus = yStatusRaw.toUpperCase();
-        const yAppt = (cells[0] ?? '').trim();
-        if (yAppt) yLastAppt = yAppt;
-
-        const yDn = (cells[2] ?? '').trim();
-        const yCarrier = (cells[1] ?? '').trim();
-        const yLoadId = (cells[7] ?? '').trim();
-
-        // Skip header rows, spacers, and section markers (PRELOADS BELOW etc.)
-        if (yCarrier.toUpperCase() === 'CARRIER' || yDn.toUpperCase() === 'DN#' || yDn.toUpperCase() === 'DN') continue;
-        if (yCarrier.toUpperCase().includes('PRELOADS BELOW') || yCarrier.toUpperCase().includes('OUTBOUND SCHEDULE')) continue;
-        if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(yCarrier) || /^[A-Z]/.test(yCarrier) && !yDn && !yLoadId && !yStatus) continue;
-
-        // Valid data row: has DN / carrier / load ID / status evidence
-        const isValidRow = Boolean(yDn || yCarrier || yLoadId || yStatus);
-        if (!isValidRow) continue;
-
-        const explicitlyMissed = yStatus === 'MISSED APPT' || yStatus === 'MISSED' || yStatus.includes('NO SHOW');
-        const blankAppointment = !yLastAppt.trim();
-        const notHandled = !OUTBOUND_HANDLED_STATUSES.has(yStatus);
-
-        if (explicitlyMissed || (blankAppointment && notHandled)) {
-          missedOutboundCount++;
-          missedOutboundRows.push({
-            dn: yDn,
-            status: yStatusRaw,
-            carrier: yCarrier,
-            loadNo: (cells[3] ?? '').trim(),
-            appointmentTime: yLastAppt,
-            door: (cells[5] ?? '').trim(),
-            loadId: yLoadId,
-            pickupDateTime: (cells[18] ?? '').trim(),
-          });
-        }
-      }
+      const yesterdayText = await fetchDatedSheet(OUTBOUND_SHEET_ID, yesterday.date, yesterday.iso);
+      missedOutboundRows = parseMissedOutboundRows(yesterdayText.split('\n'));
+      missedOutboundCount = missedOutboundRows.length;
     } catch (e: any) {
       missedOutboundError = e.message || 'Outbound schedule unavailable';
     }

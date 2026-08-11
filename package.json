@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test:extract-token": "tsx src/test-extract-token.ts",
     "test:auth-health": "tsx --test src/test-auth-health.ts",
-    "test:summary-metrics": "tsx --test src/test-summary-metrics.ts"
+    "test:summary-metrics": "tsx --test src/test-summary-metrics.ts",
+    "test:missed-outbound": "tsx --test src/test-outbound-missed.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

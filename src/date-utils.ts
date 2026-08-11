@@ -109,15 +109,21 @@ export function getYesterdayDateLA(): { date: Date; iso: string; display: string
 }
 
 export function getSheetTabNameForDate(date: Date): string {
+  return getSheetTabNameCandidatesForDate(date)[0];
+}
+
+export function getSheetTabNameCandidatesForDate(date: Date): string[] {
   const dayFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "long" });
-  const monthFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "long" });
+  const longMonthFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "long" });
+  const shortMonthFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "short" });
   const dayNumFormatter = new Intl.DateTimeFormat("en-US", { timeZone: TZ, day: "numeric" });
 
   const weekday = dayFormatter.format(date).toUpperCase();
-  const month = monthFormatter.format(date).toUpperCase();
+  const months = [longMonthFormatter.format(date).toUpperCase(), shortMonthFormatter.format(date).toUpperCase()];
   const dayNum = dayNumFormatter.format(date).padStart(2, "0");
+  const separators = [" - ", "  - ", "- ", " -  ", "  "];
 
-  return `${weekday} - ${month} ${dayNum}`;
+  return [...new Set(months.flatMap((month) => separators.map((separator) => `${weekday}${separator}${month} ${dayNum}`)))];
 }
 
 /**
