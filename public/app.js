@@ -158,11 +158,11 @@
     if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No records</p>'; el.hidden = false; return; }
     var html = '<div class="detail-header"><span class="detail-header-title">' + escapeHtml(title) + '</span><span class="detail-header-count">' + rows.length + ' total</span></div>';
     if (isOutbound) {
-      html += '<table><thead><tr><th>DN</th><th>Carrier</th><th>Load #</th><th>Appt Date &amp; Time</th><th>Status</th><th>Door</th><th>Load ID</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>DN</th><th>Carrier</th><th>Load ID</th><th>Appt Date &amp; Time</th><th>Status</th><th>Door</th></tr></thead><tbody>';
       rows.forEach(function (r) {
         var apptDisplay = r.appointmentTime || '—';
         if (dateLabel && r.appointmentTime) apptDisplay = dateLabel + ' ' + r.appointmentTime;
-        html += '<tr><td>' + escapeHtml(r.dn || '—') + '</td><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.loadNo || '—') + '</td><td>' + escapeHtml(apptDisplay) + '</td><td>' + escapeHtml(r.status || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td><td>' + escapeHtml(r.loadId || '—') + '</td></tr>';
+        html += '<tr><td>' + escapeHtml(r.dn || '—') + '</td><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.loadId || '—') + '</td><td>' + escapeHtml(apptDisplay) + '</td><td>' + escapeHtml(r.status || '—') + '</td><td>' + escapeHtml(r.door || '—') + '</td></tr>';
       });
     } else {
       html += '<table><thead><tr><th>Carrier</th><th>RN</th><th>PO / Reference</th><th>Appt</th><th>Status</th><th>Door</th><th>Arrival</th></tr></thead><tbody>';
