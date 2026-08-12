@@ -177,7 +177,6 @@ router.get('/yard', async (_req: Request, res: Response) => {
     const lines = text.split('\n');
 
     let inYardCount = 0;
-    let noRnCount = 0;
     const inYardRows: YardRow[] = [];
     const noRnRows: YardRow[] = [];
 
@@ -191,24 +190,14 @@ router.get('/yard', async (_req: Request, res: Response) => {
       const row: YardRow = { carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date };
       inYardCount++;
       inYardRows.push(row);
-      if (isNoRn(rn)) {
-        noRnCount++;
-        noRnRows.push(row);
-      }
+      if (isNoRn(rn)) noRnRows.push(row);
     }
 
-    // Left table: only the first contiguous inbound staged/No-RN worklist after its header.
     const inboundStagedRows = parseInboundStagedRows(lines);
-    for (const row of inboundStagedRows) {
-      if (isNoRn(row.rn)) {
-        noRnCount++;
-        noRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date });
-      }
-    }
 
     res.json({
       inYardCount,
-      noRnCount,
+      noRnCount: noRnRows.length,
       inboundStagedCount: inboundStagedRows.length,
       stagedCount: inboundStagedRows.length,
       inYardRows,
