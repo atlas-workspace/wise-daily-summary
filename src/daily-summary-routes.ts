@@ -194,6 +194,11 @@ router.get('/yard', async (_req: Request, res: Response) => {
     }
 
     const inboundStagedRows = parseInboundStagedRows(lines);
+    for (const row of inboundStagedRows) {
+      if (isNoRn(row.rn)) {
+        noRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date });
+      }
+    }
 
     res.json({
       inYardCount,
