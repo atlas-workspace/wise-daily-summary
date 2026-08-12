@@ -22,13 +22,38 @@ function parseCSVLine(line: string): string[] {
   return cells;
 }
 
-interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; }
+interface YardRow { carrier: string; rn: string; trailer: string; reference: string; date: string; source?: string; }
 interface InboundStagedRow { carrier: string; rn: string; reference: string; door: string; date: string; notes: string; status: 'STAGED'; }
 interface YesterdayNoRnRow { carrier: string; rn: string; trailer: string; reference: string; date: string; door: string; notes: string; source: string; }
 
 function isNoRn(rn: string): boolean {
-  const upper = rn.toUpperCase().replace(/-/g, ' ');
-  return upper === 'NO RN' || upper.includes('NO RN');
+  return rn.trim().toUpperCase().replace(/-/g, ' ').replace(/\s+/g, ' ') === 'NO RN';
+}
+
+function parseLeftNoRnRows(lines: string[]): YardRow[] {
+  const headerIndex = lines.findIndex((line) => {
+    const cells = parseCSVLine(line);
+    return (cells[0] ?? '').trim().toUpperCase() === 'CARRIER' && (cells[2] ?? '').trim().toUpperCase().includes('RN');
+  });
+  if (headerIndex < 0) return [];
+
+  const rows: YardRow[] = [];
+  for (let index = headerIndex + 1; index < lines.length; index++) {
+    const cells = parseCSVLine(lines[index]);
+    const carrier = (cells[0] ?? '').trim();
+    const rn = (cells[2] ?? '').trim();
+    const reference = (cells[3] ?? '').trim();
+    if (!carrier || !reference || !isNoRn(rn)) continue;
+    rows.push({
+      carrier,
+      rn,
+      trailer: '',
+      reference,
+      date: (cells[5] ?? '').trim(),
+      source: 'Inbound tracker',
+    });
+  }
+  return rows;
 }
 
 function parseInboundStagedRows(lines: string[]): InboundStagedRow[] {
@@ -190,15 +215,11 @@ router.get('/yard', async (_req: Request, res: Response) => {
       const row: YardRow = { carrier, rn, trailer: (cells[14] ?? '').trim(), reference: (cells[15] ?? '').trim(), date };
       inYardCount++;
       inYardRows.push(row);
-      if (isNoRn(rn)) noRnRows.push(row);
+      if (isNoRn(rn)) noRnRows.push({ ...row, source: 'Yard table' });
     }
 
     const inboundStagedRows = parseInboundStagedRows(lines);
-    for (const row of inboundStagedRows) {
-      if (isNoRn(row.rn)) {
-        noRnRows.push({ carrier: row.carrier, rn: row.rn, trailer: '', reference: row.reference, date: row.date });
-      }
-    }
+    noRnRows.push(...parseLeftNoRnRows(lines));
 
     res.json({
       inYardCount,

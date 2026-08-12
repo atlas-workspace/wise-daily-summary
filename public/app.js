@@ -67,9 +67,10 @@
     var el = document.getElementById(containerId);
     if (!rows || rows.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">No records</p>'; el.hidden = false; return; }
     var html = '<p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;">' + escapeHtml(title) + ' (' + rows.length + ')</p>';
-    html += '<table><thead><tr><th>Carrier</th><th>RN</th><th>Trailer</th><th>Reference</th><th>Date</th></tr></thead><tbody>';
+    var showSource = rows.some(function (r) { return Boolean(r.source); });
+    html += '<table><thead><tr><th>Carrier</th><th>RN</th><th>Trailer</th><th>Reference</th><th>Date</th>' + (showSource ? '<th>Tracker Area</th>' : '') + '</tr></thead><tbody>';
     rows.forEach(function (r) {
-      html += '<tr><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.trailer || '—') + '</td><td>' + escapeHtml(r.reference || '—') + '</td><td>' + escapeHtml(r.date || '—') + '</td></tr>';
+      html += '<tr><td>' + escapeHtml(r.carrier || '—') + '</td><td>' + escapeHtml(r.rn || '—') + '</td><td>' + escapeHtml(r.trailer || '—') + '</td><td>' + escapeHtml(r.reference || '—') + '</td><td>' + escapeHtml(r.date || '—') + '</td>' + (showSource ? '<td>' + escapeHtml(r.source || '—') + '</td>' : '') + '</tr>';
     });
     html += '</tbody></table>';
     el.innerHTML = html;
