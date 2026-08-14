@@ -379,11 +379,9 @@ router.get('/inbound-schedule', async (_req: Request, res: Response) => {
       const arrivalTime = cells[8]?.trim() ?? '';
 
       if (inDropSection) {
-        // Count every valid load in the drop section, whether it is still
-        // unfilled or already has RN, status, door, or arrival information.
-        // Requiring a carrier plus load evidence excludes headers and spacers.
-        const hasRowEvidence = Boolean(carrier && (reference || rn || status));
-        if (!hasRowEvidence) continue;
+        // Drop Scheduled includes only rows with a reference number whose
+        // status is still blank. This also excludes headers and spacers.
+        if (!reference || status) continue;
 
         const row: PoRow = { po: reference, appointmentTime: lastAppointmentTime, carrier, rn, et, door, status, arrivalTime };
         dropPoRows.push(row);
